@@ -2,11 +2,24 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { AspectRatio, ImageQuality } from "../types";
 
-// Agar TypeScript mengenali process.env tanpa error
-declare var process: {
-  env: {
-    API_KEY: string;
-  };
+// Deklarasi Global untuk process.env
+declare global {
+  interface Window {
+    process: {
+      env: {
+        API_KEY: string;
+      };
+    };
+  }
+}
+
+// Gunakan akses aman untuk process.env
+const getApiKey = () => {
+  try {
+    return process.env.API_KEY;
+  } catch (e) {
+    return "";
+  }
 };
 
 const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
@@ -42,7 +55,7 @@ export const generateImage = async (
   aspectRatio: AspectRatio,
   quality: ImageQuality,
   angle: string,
-  _apiKey?: string // Parameter ini tidak digunakan sesuai instruksi, API_KEY diambil dari process.env
+  _apiKey?: string
 ): Promise<string> => {
   const imageParts = await Promise.all(files.map(file => fileToPart(file)));
   const isHD = quality !== ImageQuality.STANDARD;
@@ -57,7 +70,7 @@ export const generateImage = async (
     RULES: Keep the subject's identity/product details consistent unless specified otherwise.
   `;
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const response = await ai.models.generateContent({
     model: modelName,
     contents: { parts: [...imageParts, { text: coreInstruction.trim() }] },
@@ -69,16 +82,20 @@ export const generateImage = async (
     }
   });
 
-  const parts = response.candidates?.[0]?.content?.parts;
-  const part = parts?.find(p => p.inlineData);
-  if (part?.inlineData) {
-    return `data:image/png;base64,${part.inlineData.data}`;
+  const candidates = response.candidates;
+  if (candidates && candidates.length > 0) {
+    const parts = candidates[0].content?.parts;
+    const part = parts?.find(p => p.inlineData);
+    if (part?.inlineData) {
+      return `data:image/png;base64,${part.inlineData.data}`;
+    }
   }
-  throw new Error("AI gagal memproses gambar. Coba ganti deskripsi atau kualitas.");
+  
+  throw new Error("AI gagal memproses gambar. Mohon periksa koneksi atau deskripsi Anda.");
 };
 
 export const generateMagicContent = async (imageUrl: string, type: 'voice' | 'video'): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const imgPart = await urlToPart(imageUrl);
   
   const prompt = type === 'voice' 
@@ -99,7 +116,7 @@ export const generateMagicContent = async (imageUrl: string, type: 'voice' | 'vi
 };
 
 export const generateTTS = async (text: string, voiceName: string = 'Kore'): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
     contents: [{ parts: [{ text: `Say ONLY the following text in Indonesian as a cheerful TikTok influencer: ${text}` }] }],
@@ -113,9 +130,13 @@ export const generateTTS = async (text: string, voiceName: string = 'Kore'): Pro
     },
   });
 
-  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  if (!base64Audio) throw new Error("Gagal generate suara.");
-  return base64Audio;
+  const candidates = response.candidates;
+  if (candidates && candidates.length > 0) {
+    const base64Audio = candidates[0].content?.parts?.[0]?.inlineData?.data;
+    if (base64Audio) return base64Audio;
+  }
+  
+  throw new Error("Gagal generate suara.");
 };
 
 export function decodeBase64(base64: string) {
