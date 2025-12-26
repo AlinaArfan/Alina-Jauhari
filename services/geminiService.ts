@@ -2,23 +2,6 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { AspectRatio, ImageQuality } from "../types";
 
-const retryWithBackoff = async <T>(
-  operation: () => Promise<T>, 
-  retries: number = 3, 
-  delay: number = 2000
-): Promise<T> => {
-  try {
-    return await operation();
-  } catch (error: any) {
-    const isQuotaError = error.message?.includes('429') || error.message?.includes('quota');
-    if (isQuotaError && retries > 0) {
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return retryWithBackoff(operation, retries - 1, delay * 2);
-    }
-    throw error;
-  }
-};
-
 const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -31,62 +14,135 @@ const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType:
   });
 };
 
+const urlToPart = async (url: string): Promise<{ inlineData: { data: string; mimeType: string } }> => {
+  const response = await fetch(url);
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = (reader.result as string).split(',')[1];
+      resolve({ inlineData: { data: base64String, mimeType: blob.type } });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
 export const generateImage = async (
   files: File[],
   systemPrompt: string,
   userPrompt: string,
   aspectRatio: AspectRatio,
   quality: ImageQuality,
+  angle: string,
   apiKey: string
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || apiKey });
   const imageParts = await Promise.all(files.map(file => fileToPart(file)));
-
-  const isHD = quality === ImageQuality.HD_2K || quality === ImageQuality.ULTRA_HD_4K;
+  const isHD = quality !== ImageQuality.STANDARD;
   const modelName = isHD ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
 
-  // Enhanced Prompt for Identity Preservation
-  const finalSystemPrompt = `
-    ROLE: Professional Commercial Photographer and AI Image Editor.
-    STRICT RULE: YOU MUST PRESERVE THE EXACT IDENTITY, COLOR, TEXTURE, AND SHAPE OF THE PRODUCT SHOWN IN THE UPLOADED IMAGE. 
-    DO NOT GENERATE A NEW PRODUCT. PLACE THE EXISTING PRODUCT INTO THE NEW ENVIRONMENT.
-    
-    TASK CONTEXT: ${systemPrompt}
-    USER REQUEST: ${userPrompt}
-    
-    OUTPUT REQUIREMENTS:
-    - High-end commercial photography style.
-    - Realistic lighting that matches the new environment.
-    - Seamless integration between the product and the background.
-    - No text, no watermarks, no distorted objects.
+  const coreInstruction = `
+    GOAL: Generate/Edit a high-end, commercial-grade photo.
+    CAMERA ANGLE: ${angle}.
+    ${systemPrompt}
+    USER DETAILS: ${userPrompt}.
+    QUALITY: Photorealistic, 8k resolution, professional commercial lighting.
+    RULES: Keep the subject's identity/product details consistent unless specified otherwise.
   `;
 
-  return retryWithBackoff(async () => {
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: { parts: [...imageParts, { text: finalSystemPrompt }] },
-      config: {
-        imageConfig: { 
-          aspectRatio: aspectRatio as any,
-          ...(isHD ? { imageSize: quality as any } : {})
-        }
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: modelName,
+    contents: { parts: [...imageParts, { text: coreInstruction.trim() }] },
+    config: {
+      imageConfig: {
+        aspectRatio: aspectRatio as any,
+        ...(isHD ? { imageSize: quality as any } : {})
       }
-    });
-
-    const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-    if (part?.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-    throw new Error("Gagal generate gambar. Pastikan gambar produk jelas.");
+    }
   });
+
+  const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+  if (part?.inlineData) {
+    return `data:image/png;base64,${part.inlineData.data}`;
+  }
+  throw new Error("AI gagal memproses gambar. Coba ganti deskripsi atau kualitas.");
 };
 
-export const generateDescription = async (imageFile: File, context: string, apiKey: string): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || apiKey });
-    const imgPart = await fileToPart(imageFile);
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: { parts: [imgPart, { text: `Analisis produk ini. Berikan deskripsi singkat TENTANG PRODUKNYA SAJA (warna, jenis, bahan). Jangan bahas latar belakang.` }] }
-    });
-    return response.text?.trim() || "";
+export const generateMagicContent = async (imageUrl: string, type: 'voice' | 'video'): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const imgPart = await urlToPart(imageUrl);
+  
+  const prompt = type === 'voice' 
+    ? `Analisis produk/gambar ini dan buatkan naskah jualan TikTok yang sangat VIRAL.
+       ATURAN KETAT:
+       1. HANYA TULIS NASKAHNYA SAJA. 
+       2. DILARANG KERAS menulis kalimat pengantar.
+       3. Gunakan bahasa Indonesia gaul, persuasif, dan emosional.
+       4. Maksimal 60 kata.`
+    : "Buatkan instruksi gerakan kamera (Video Motion Prompt) yang estetik untuk gambar ini. HANYA TULIS INSTRUKSINYA SAJA.";
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: { parts: [imgPart, { text: prompt }] }
+  });
+  
+  return response.text?.trim() || "Gagal membuat konten.";
 };
 
-// ... (functions generateSpeech, generateVideoPrompt, generateVoiceScript remain same but use process.env.API_KEY)
+export const generateTTS = async (text: string, voiceName: string = 'Kore'): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-preview-tts",
+    contents: [{ parts: [{ text: `Say ONLY the following text in Indonesian as a cheerful TikTok influencer: ${text}` }] }],
+    config: {
+      responseModalities: [Modality.AUDIO],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: voiceName as any },
+        },
+      },
+    },
+  });
+
+  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  if (!base64Audio) throw new Error("Gagal generate suara.");
+  return base64Audio;
+};
+
+export function decodeBase64(base64: string) {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export async function decodeAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
+  const channelData = buffer.getChannelData(0);
+  for (let i = 0; i < dataInt16.length; i++) {
+    channelData[i] = dataInt16[i] / 32768.0;
+  }
+  return buffer;
+}
+
+export function pcmToWav(pcmData: Uint8Array, sampleRate: number = 24000): Blob {
+  const buffer = new ArrayBuffer(44 + pcmData.length);
+  const view = new DataView(buffer);
+  view.setUint32(0, 0x52494646, false); // "RIFF"
+  view.setUint32(4, 36 + pcmData.length, true);
+  view.setUint32(8, 0x57415645, false); // "WAVE"
+  view.setUint32(12, 0x666d7420, false); 
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint16(34, 16, true);
+  view.setUint32(36, 0x64617461, false);
+  view.setUint32(40, pcmData.length, true);
+  const pcmBytes = new Uint8Array(buffer, 44);
+  pcmBytes.set(pcmData);
+  return new Blob([buffer], { type: 'audio/wav' });
+}

@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
-import Sidebar from './components/Sidebar';
-import MainContent from './components/MainContent';
-import TutorialModal from './components/TutorialModal';
-import { NavItem } from './types';
+import Sidebar from './components/Sidebar.tsx';
+import MainContent from './components/MainContent.tsx';
+import TutorialModal from './components/TutorialModal.tsx';
+import { NavItem } from './types.ts';
 import { Menu, X } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -17,9 +17,9 @@ const App: React.FC = () => {
       {/* Mobile Menu Toggle */}
       <button 
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="lg:hidden fixed top-4 right-4 z-50 p-2 bg-white rounded-lg shadow-md text-gray-700"
+        className="lg:hidden fixed top-4 right-4 z-50 p-2 bg-white rounded-xl shadow-sm text-gray-700 border border-gray-100"
       >
-        {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
 
       {/* Sidebar */}
@@ -33,10 +33,10 @@ const App: React.FC = () => {
         onOpenTutorial={() => setIsTutorialOpen(true)}
       />
 
-      {/* Main Content Overlay for Mobile */}
+      {/* Overlay for Mobile */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-20 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -44,7 +44,7 @@ const App: React.FC = () => {
       {/* Main Content */}
       <MainContent activeItem={activeItem} setActiveItem={setActiveItem} />
 
-      {/* Tutorial Modal */}
+      {/* Global Tutorial */}
       <TutorialModal isOpen={isTutorialOpen} onClose={() => setIsTutorialOpen(false)} />
     </div>
   );
