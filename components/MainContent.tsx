@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { NavItem, AspectRatio, UploadedImage, ImageQuality } from '../types.ts';
-import ImageUploader from './ImageUploader.tsx';
+import { NavItem, AspectRatio, UploadedImage, ImageQuality } from '../types';
+import ImageUploader from './ImageUploader';
 import { 
   generateImage, 
   generateMagicContent, 
@@ -9,7 +9,7 @@ import {
   decodeBase64, 
   decodeAudioData,
   pcmToWav 
-} from '../services/geminiService.ts';
+} from '../services/geminiService';
 import { 
   Download, AlertCircle, Sparkles, 
   CheckCircle2, Loader2, ShoppingBag, Box, 

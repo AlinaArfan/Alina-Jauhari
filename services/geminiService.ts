@@ -2,6 +2,13 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { AspectRatio, ImageQuality } from "../types";
 
+// Agar TypeScript mengenali process.env tanpa error
+declare var process: {
+  env: {
+    API_KEY: string;
+  };
+};
+
 const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -35,7 +42,7 @@ export const generateImage = async (
   aspectRatio: AspectRatio,
   quality: ImageQuality,
   angle: string,
-  apiKey: string
+  _apiKey?: string // Parameter ini tidak digunakan sesuai instruksi, API_KEY diambil dari process.env
 ): Promise<string> => {
   const imageParts = await Promise.all(files.map(file => fileToPart(file)));
   const isHD = quality !== ImageQuality.STANDARD;
@@ -62,7 +69,8 @@ export const generateImage = async (
     }
   });
 
-  const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+  const parts = response.candidates?.[0]?.content?.parts;
+  const part = parts?.find(p => p.inlineData);
   if (part?.inlineData) {
     return `data:image/png;base64,${part.inlineData.data}`;
   }

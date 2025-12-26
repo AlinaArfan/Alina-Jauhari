@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
-import Sidebar from './components/Sidebar.tsx';
-import MainContent from './components/MainContent.tsx';
-import TutorialModal from './components/TutorialModal.tsx';
-import { NavItem } from './types.ts';
+import Sidebar from './components/Sidebar';
+import MainContent from './components/MainContent';
+import TutorialModal from './components/TutorialModal';
+import { NavItem } from './types';
 import { Menu, X } from 'lucide-react';
 
 const App: React.FC = () => {
