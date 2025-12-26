@@ -2,26 +2,6 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { AspectRatio, ImageQuality } from "../types";
 
-// Deklarasi Global untuk process.env
-declare global {
-  interface Window {
-    process: {
-      env: {
-        API_KEY: string;
-      };
-    };
-  }
-}
-
-// Gunakan akses aman untuk process.env
-const getApiKey = () => {
-  try {
-    return process.env.API_KEY;
-  } catch (e) {
-    return "";
-  }
-};
-
 const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -54,8 +34,7 @@ export const generateImage = async (
   userPrompt: string,
   aspectRatio: AspectRatio,
   quality: ImageQuality,
-  angle: string,
-  _apiKey?: string
+  angle: string
 ): Promise<string> => {
   const imageParts = await Promise.all(files.map(file => fileToPart(file)));
   const isHD = quality !== ImageQuality.STANDARD;
@@ -70,34 +49,42 @@ export const generateImage = async (
     RULES: Keep the subject's identity/product details consistent unless specified otherwise.
   `;
 
-  const ai = new GoogleGenAI({ apiKey: getApiKey() });
-  const response = await ai.models.generateContent({
-    model: modelName,
-    contents: { parts: [...imageParts, { text: coreInstruction.trim() }] },
-    config: {
-      imageConfig: {
-        aspectRatio: aspectRatio as any,
-        ...(isHD ? { imageSize: quality as any } : {})
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: { parts: [...imageParts, { text: coreInstruction.trim() }] },
+      config: {
+        imageConfig: {
+          aspectRatio: aspectRatio as any,
+          ...(isHD ? { imageSize: quality as any } : {})
+        }
+      }
+    });
+
+    const candidates = response.candidates;
+    if (candidates && candidates.length > 0) {
+      const parts = candidates[0].content?.parts;
+      const part = parts?.find(part => part.inlineData);
+      if (part?.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
       }
     }
-  });
-
-  const candidates = response.candidates;
-  if (candidates && candidates.length > 0) {
-    const parts = candidates[0].content?.parts;
-    const part = parts?.find(p => p.inlineData);
-    if (part?.inlineData) {
-      return `data:image/png;base64,${part.inlineData.data}`;
+    throw new Error("AI tidak mengembalikan gambar.");
+  } catch (error: any) {
+    if (error.message?.includes("Requested entity was not found") || error.message?.includes("API key not valid")) {
+       // Reset key selection state jika error terjadi
+       if (window.aistudio?.openSelectKey) {
+         await window.aistudio.openSelectKey();
+         throw new Error("Kunci API tidak valid. Silakan pilih kunci baru yang valid.");
+       }
     }
+    throw error;
   }
-  
-  throw new Error("AI gagal memproses gambar. Mohon periksa koneksi atau deskripsi Anda.");
 };
 
 export const generateMagicContent = async (imageUrl: string, type: 'voice' | 'video'): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const imgPart = await urlToPart(imageUrl);
-  
   const prompt = type === 'voice' 
     ? `Analisis produk/gambar ini dan buatkan naskah jualan TikTok yang sangat VIRAL.
        ATURAN KETAT:
@@ -107,6 +94,7 @@ export const generateMagicContent = async (imageUrl: string, type: 'voice' | 'vi
        4. Maksimal 60 kata.`
     : "Buatkan instruksi gerakan kamera (Video Motion Prompt) yang estetik untuk gambar ini. HANYA TULIS INSTRUKSINYA SAJA.";
 
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: { parts: [imgPart, { text: prompt }] }
@@ -116,7 +104,7 @@ export const generateMagicContent = async (imageUrl: string, type: 'voice' | 'vi
 };
 
 export const generateTTS = async (text: string, voiceName: string = 'Kore'): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: getApiKey() });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
     contents: [{ parts: [{ text: `Say ONLY the following text in Indonesian as a cheerful TikTok influencer: ${text}` }] }],

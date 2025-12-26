@@ -175,12 +175,14 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         setProgress({ current: 0, total: 6 });
         const batchAngles = ["Front View", "Left Angle", "Right Angle", "From Above", "From Below", "Macro Close-up"];
         for (let i = 0; i < 6; i++) {
-          const url = await generateImage(inputFiles, systemP, prompt, ratio, quality, batchAngles[i], "");
+          // Fix: Remove extra "" argument (line 178)
+          const url = await generateImage(inputFiles, systemP, prompt, ratio, quality, batchAngles[i]);
           setResults(prev => [...prev, url]);
           setProgress(p => ({ ...p, current: i + 1 }));
         }
       } else {
-        const url = await generateImage(inputFiles, systemP, prompt, ratio, quality, angleDesc, "");
+        // Fix: Remove extra "" argument (line 183)
+        const url = await generateImage(inputFiles, systemP, prompt, ratio, quality, angleDesc);
         setResults([url]);
       }
     } catch (e: any) {
