@@ -11,14 +11,14 @@ import {
   pcmToWav 
 } from '../services/geminiService';
 import { 
-  Download, AlertCircle, Sparkles, 
-  CheckCircle2, Loader2, ShoppingBag, Box, 
+  Download, Sparkles, 
+  Loader2, ShoppingBag, Box, 
   Coffee, LayoutGrid, Maximize, 
   Smartphone, UserSquare2, Sun, Star, Megaphone, 
   Video, Mic, Users, Home, Bed, Utensils, Sofa, TreePine, Car, Dumbbell, Store,
-  Copy, Check, Play, Pause, Volume2, Music, User, ArrowRight, Shirt, Layers,
-  Camera, Eye, Target, ArrowDownCircle, ArrowUpCircle, ZoomIn, View, UserCircle, Image as ImageIcon, Wand2, RefreshCw,
-  Globe, Languages, MapPin, Flag
+  Play, Pause, User, ArrowRight, Shirt, Layers,
+  Eye, Target, ArrowDownCircle, ArrowUpCircle, ZoomIn, View, UserCircle, Image as ImageIcon, Wand2,
+  MapPin, Globe, Languages
 } from 'lucide-react';
 
 const TabButton = ({ active, onClick, icon: Icon, label }: any) => (
@@ -43,7 +43,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   const [selectedGender, setSelectedGender] = useState("Wanita");
   const [selectedRace, setSelectedRace] = useState("Indonesia");
   const [ratio, setRatio] = useState<AspectRatio>(AspectRatio.SQUARE);
-  const [quality, setQuality] = useState<ImageQuality>(ImageQuality.STANDARD);
   const [isGenerating, setIsGenerating] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [results, setResults] = useState<string[]>([]);
@@ -103,7 +102,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
 
   useEffect(() => {
     setImages([]); setSecondaryImages([]); setResults([]); setPrompt(""); setError(null); setMagicContent(null);
-    setQuality(ImageQuality.STANDARD); setBatchMode(false);
     setSelectedStyle(activeItem === NavItem.UGC ? 'bedroom' : 'studio');
     
     switch(activeItem) {
@@ -175,14 +173,12 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         setProgress({ current: 0, total: 6 });
         const batchAngles = ["Front View", "Left Angle", "Right Angle", "From Above", "From Below", "Macro Close-up"];
         for (let i = 0; i < 6; i++) {
-          // Fix: Remove extra "" argument (line 178)
-          const url = await generateImage(inputFiles, systemP, prompt, ratio, quality, batchAngles[i]);
+          const url = await generateImage(inputFiles, systemP, prompt, ratio, ImageQuality.STANDARD, batchAngles[i]);
           setResults(prev => [...prev, url]);
           setProgress(p => ({ ...p, current: i + 1 }));
         }
       } else {
-        // Fix: Remove extra "" argument (line 183)
-        const url = await generateImage(inputFiles, systemP, prompt, ratio, quality, angleDesc);
+        const url = await generateImage(inputFiles, systemP, prompt, ratio, ImageQuality.STANDARD, angleDesc);
         setResults([url]);
       }
     } catch (e: any) {
@@ -361,10 +357,9 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                        <option value={AspectRatio.PORTRAIT}>9:16 TALL</option>
                        <option value={AspectRatio.LANDSCAPE}>16:9 WIDE</option>
                     </select>
-                    <select value={quality} onChange={e => setQuality(e.target.value as any)} className="w-full p-6 bg-gray-50 border-2 border-gray-100 rounded-3xl text-xs font-black tracking-widest uppercase outline-none focus:border-teal-400 focus:bg-white transition-all">
-                       <option value={ImageQuality.STANDARD}>1K Standard Performance</option>
-                       <option value={ImageQuality.HD_2K}>2K Pro High-Definition</option>
-                    </select>
+                    <div className="p-6 bg-gray-100 border-2 border-gray-100 rounded-3xl text-[10px] font-black tracking-widest uppercase text-gray-400">
+                        1K Standard Performance (Fixed)
+                    </div>
                   </div>
                </div>
             </div>

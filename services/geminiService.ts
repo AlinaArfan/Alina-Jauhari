@@ -37,8 +37,8 @@ export const generateImage = async (
   angle: string
 ): Promise<string> => {
   const imageParts = await Promise.all(files.map(file => fileToPart(file)));
-  const isHD = quality !== ImageQuality.STANDARD;
-  const modelName = isHD ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
+  // Selalu gunakan Flash model untuk menghindari limitasi API Key Pro
+  const modelName = 'gemini-2.5-flash-image';
 
   const coreInstruction = `
     GOAL: Generate/Edit a high-end, commercial-grade photo.
@@ -56,8 +56,7 @@ export const generateImage = async (
       contents: { parts: [...imageParts, { text: coreInstruction.trim() }] },
       config: {
         imageConfig: {
-          aspectRatio: aspectRatio as any,
-          ...(isHD ? { imageSize: quality as any } : {})
+          aspectRatio: aspectRatio as any
         }
       }
     });
@@ -72,13 +71,7 @@ export const generateImage = async (
     }
     throw new Error("AI tidak mengembalikan gambar.");
   } catch (error: any) {
-    if (error.message?.includes("Requested entity was not found") || error.message?.includes("API key not valid")) {
-       // Reset key selection state jika error terjadi
-       if (window.aistudio?.openSelectKey) {
-         await window.aistudio.openSelectKey();
-         throw new Error("Kunci API tidak valid. Silakan pilih kunci baru yang valid.");
-       }
-    }
+    console.error("Gemini Error:", error);
     throw error;
   }
 };
