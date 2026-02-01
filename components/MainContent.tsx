@@ -100,13 +100,13 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   useEffect(() => {
     const saved = localStorage.getItem('MAGIC_PICTURE_HISTORY');
     if (saved) {
-      try { setHistory(JSON.parse(saved)); } catch (e) { console.error(e); }
+      try { setHistory(JSON.parse(saved)); } catch (e) { console.error("History load error:", e); }
     }
   }, []);
 
   useEffect(() => {
     if (history.length > 0) {
-      localStorage.setItem('MAGIC_PICTURE_HISTORY', JSON.stringify(history.slice(0, 100)));
+      localStorage.setItem('MAGIC_PICTURE_HISTORY', JSON.stringify(history.slice(0, 50)));
     }
   }, [history]);
 
@@ -132,17 +132,18 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     setError(null); 
     
     try {
-      // Safety Check for AI Studio environment vs Standalone Vercel
+      // 1. Silent Check for AI Studio (Don't crash if missing)
       const aiStudio = (window as any).aistudio;
       if (aiStudio && typeof aiStudio.hasSelectedApiKey === 'function') {
         const hasKey = await aiStudio.hasSelectedApiKey();
         if (!hasKey) {
-          await aiStudio.openSelectKey();
+            await aiStudio.openSelectKey();
         }
       }
 
+      // 2. Proccess Generation
       if (activeItem === NavItem.SEO) {
-        const res = await getSEOTrends(prompt || "Tren affiliate marketing 2025");
+        const res = await getSEOTrends(prompt || "Tren affiliate marketing terbaru");
         setTextContent(res.text);
         setSources(res.sources);
       } else if (activeItem === NavItem.COPYWRITER) {
@@ -157,6 +158,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
           const promises = BATCH_SET.map(code => 
             generateImage(images.map(i => i.file), bgRef[0]?.file || null, baseSysPrompt, userPrompt, ratio, quality, code)
               .then(url => ({ url, angle: code }))
+              .catch(err => { throw new Error(`Gagal memproses angle ${code}: ${err.message}`); })
           );
           finalResults = await Promise.all(promises);
         } else {
@@ -175,16 +177,16 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         setHistory(prev => [...newHistory, ...prev]);
       }
     } catch (e: any) {
-      console.error("Generation Error:", e);
-      if (e.message?.includes("API_KEY") || e.message?.includes("not found")) {
+      console.error("Critical Generation Error:", e);
+      let errorMsg = e.message || "Gagal memproses permintaan.";
+      
+      if (errorMsg.includes("API_KEY") || errorMsg.includes("not found")) {
         const aiStudio = (window as any).aistudio;
-        if (aiStudio) {
-            await aiStudio.openSelectKey();
-        }
-        setError("API Key Error. Pastikan Environment Variable API_KEY sudah diset di Vercel.");
-      } else {
-        setError(e.message || "Gagal memproses permintaan. Cek koneksi dan foto produk Anda.");
+        if (aiStudio) await aiStudio.openSelectKey();
+        errorMsg = "API Key bermasalah. Pastikan API_KEY sudah diset di Environment Variables Vercel.";
       }
+      
+      setError(errorMsg);
     } finally {
       setIsGenerating(false);
     }
@@ -395,7 +397,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
             
             {error && (
                 <div className="p-6 bg-red-50 border-2 border-red-100 text-red-500 rounded-[2rem] flex items-center gap-4 animate-in slide-in-from-bottom-2">
-                    <AlertTriangle className="shrink-0" />
+                    <AlertTriangle className="shrink-0 text-red-600" />
                     <div className="text-xs font-bold leading-relaxed">{error}</div>
                 </div>
             )}
