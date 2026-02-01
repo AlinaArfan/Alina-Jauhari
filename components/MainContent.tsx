@@ -35,15 +35,12 @@ const ENVIRONMENTS = [
 const BATCH_SET = ["ECU", "FS", "TDA", "ULA", "S-P", "D-3Q"];
 
 const SUB_MODE_PROMPTS: Record<string, string> = {
-  // Commercial
   'product-shot': "Professional luxury studio photography, clean minimalist background, soft cinematic lighting, high-end commercial aesthetic.",
   'ai-fashion': "Photorealistic editorial fashion photography, high-quality human model wearing the garment, natural skin texture, professional lighting.",
   'mockup': "3D realistic product mockup, logo/design seamlessly integrated into a real-world object with perfect perspective and material physics.",
-  // UGC
   'selfie-review': "Authentic casual smartphone selfie, a real person holding the product with a natural smile, social media testimonial style.",
   'pov-hand': "First-person perspective (POV), realistic human hands interacting with or holding the product, natural everyday environment.",
   'unboxing-exp': "Atmospheric unboxing scene, product partially out of high-quality packaging, natural indoor morning light, organic home feel.",
-  // Ads
   'web-banner': "Wide landscape e-commerce web banner, professional marketing layout, clean space for text, high-resolution commercial graphics.",
   'youtube-thumbnail': "Vibrant high-contrast YouTube thumbnail style, bold colors, expressive composition, attention-grabbing visual elements.",
   'social-feed': "Aesthetic Instagram feed photography, lifestyle branding, trendy color grading, consistent social media visual language."
@@ -113,7 +110,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     }
   }, [history]);
 
-  // Reset Sub-Mode based on Active Studio
   useEffect(() => {
     setResults([]);
     setTextContent("");
@@ -127,23 +123,24 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   }, [activeItem]);
 
   const handleGenerate = async () => {
-    // 1. Validasi Input
     if (images.length === 0 && ![NavItem.SEO, NavItem.COPYWRITER].includes(activeItem)) {
         setError("Mohon unggah foto produk terlebih dahulu.");
         return;
-    }
-
-    // 2. Pengecekan API Key (Memicu dialog jika belum ada)
-    const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-    if (!hasKey) {
-      await (window as any).aistudio.openSelectKey();
-      // Langsung lanjut sesuai instruksi "assume success"
     }
 
     setIsGenerating(true); 
     setError(null); 
     
     try {
+      // Safety Check for AI Studio environment vs Standalone Vercel
+      const aiStudio = (window as any).aistudio;
+      if (aiStudio && typeof aiStudio.hasSelectedApiKey === 'function') {
+        const hasKey = await aiStudio.hasSelectedApiKey();
+        if (!hasKey) {
+          await aiStudio.openSelectKey();
+        }
+      }
+
       if (activeItem === NavItem.SEO) {
         const res = await getSEOTrends(prompt || "Tren affiliate marketing 2025");
         setTextContent(res.text);
@@ -180,10 +177,13 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     } catch (e: any) {
       console.error("Generation Error:", e);
       if (e.message?.includes("API_KEY") || e.message?.includes("not found")) {
-        await (window as any).aistudio.openSelectKey();
-        setError("Sesi API Key berakhir atau tidak ditemukan. Silakan pilih ulang API Key.");
+        const aiStudio = (window as any).aistudio;
+        if (aiStudio) {
+            await aiStudio.openSelectKey();
+        }
+        setError("API Key Error. Pastikan Environment Variable API_KEY sudah diset di Vercel.");
       } else {
-        setError(e.message || "Gagal memproses permintaan. Pastikan koneksi internet stabil.");
+        setError(e.message || "Gagal memproses permintaan. Cek koneksi dan foto produk Anda.");
       }
     } finally {
       setIsGenerating(false);
@@ -271,7 +271,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                     <p className="text-[9px] text-slate-400 font-bold uppercase">Ready to generate</p>
                 </div>
             </div>
-            <button onClick={() => (window as any).aistudio.openSelectKey()} className="px-5 py-2.5 bg-white text-slate-900 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-teal-50">Select API Key</button>
+            <button onClick={() => (window as any).aistudio?.openSelectKey?.()} className="px-5 py-2.5 bg-white text-slate-900 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-teal-50">Select API Key</button>
         </div>
 
         <div className="bg-white rounded-[3.5rem] shadow-2xl border border-gray-100 p-10 lg:p-16 space-y-12">
@@ -288,7 +288,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                )}
             </div>
 
-            {/* SUB-MODES SELECTION */}
+            {/* STUDIO OPTIONS */}
             {(activeItem === NavItem.COMMERCIAL || activeItem === NavItem.UGC || activeItem === NavItem.ADS) && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {activeItem === NavItem.COMMERCIAL && [
@@ -327,7 +327,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                 </div>
             )}
 
-            {/* LIGHTING & ENVIRONMENT */}
+            {/* ENVIRONMENT & LIGHTING - 10 TYPES */}
             {![NavItem.SEO, NavItem.COPYWRITER].includes(activeItem) && (
               <div className="space-y-4">
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2 flex items-center gap-2">
@@ -343,7 +343,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
               </div>
             )}
 
-            {/* PRO SHOT ANGLES */}
+            {/* PRO SHOT ANGLES - 9 TYPES */}
             {!isBatchMode && ![NavItem.SEO, NavItem.COPYWRITER].includes(activeItem) && (
                 <div className="space-y-4">
                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2 flex items-center gap-2">
@@ -368,7 +368,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
             <div className="space-y-10">
                 <div className="space-y-4">
                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Custom Instruction</label>
-                    <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Misal: 'Tambahkan efek bayangan lembut' atau 'Buat suasana lebih dramatis'..." className="w-full h-24 bg-gray-50 border-2 border-gray-100 p-6 rounded-[2rem] outline-none focus:border-teal-500 text-sm font-medium" />
+                    <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Misal: 'Tambahkan efek embun' atau 'Buat suasana lebih dramatis'..." className="w-full h-24 bg-gray-50 border-2 border-gray-100 p-6 rounded-[2rem] outline-none focus:border-teal-500 text-sm font-medium" />
                 </div>
                 <div className="flex gap-4">
                   <select value={quality} onChange={e => setQuality(e.target.value as ImageQuality)} className="flex-1 bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-xs font-black uppercase outline-none focus:border-teal-500">
@@ -383,7 +383,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                   </select>
                 </div>
                 
-                {/* TOMBOL UTAMA START GENERATION */}
                 <button 
                   onClick={handleGenerate} 
                   disabled={isGenerating} 
