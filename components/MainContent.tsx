@@ -11,7 +11,8 @@ import {
 import { 
   Download, Sparkles, Loader2, ShoppingBag, Box, Smartphone, Megaphone,
   X, Maximize2, ShieldCheck, CheckCircle, AlertTriangle, LayoutGrid, Camera, Zap, ChevronLeft, ChevronRight,
-  Shirt, Layers, Hand, PackageOpen, Wand2, Focus, Compass, ArrowRight, BarChart3, Trash2, Calendar, History as HistoryIcon
+  Shirt, Layers, Hand, PackageOpen, Wand2, Focus, Compass, ArrowRight, BarChart3, Trash2, Calendar, History as HistoryIcon,
+  Monitor, Youtube, Instagram
 } from 'lucide-react';
 
 const PRO_ANGLES = [
@@ -33,13 +34,30 @@ const ENVIRONMENTS = [
 
 const BATCH_SET = ["ECU", "FS", "TDA", "ULA", "S-P", "D-3Q"];
 
+// Definisi Prompt Spesifik untuk setiap Sub-Mode
+const SUB_MODE_PROMPTS: Record<string, string> = {
+  // Commercial Hub
+  'product-shot': "Professional luxury studio photography, clean minimalist background, soft cinematic lighting, high-end commercial aesthetic.",
+  'ai-fashion': "Photorealistic editorial fashion photography, high-quality human model wearing the garment, natural skin texture, professional lighting.",
+  'mockup': "3D realistic product mockup, logo/design seamlessly integrated into a real-world object with perfect perspective and material physics.",
+  
+  // UGC Studio
+  'selfie-review': "Authentic casual smartphone selfie, a real person holding the product with a natural smile, social media testimonial style.",
+  'pov-hand': "First-person perspective (POV), realistic human hands interacting with or holding the product, natural everyday environment.",
+  'unboxing-exp': "Atmospheric unboxing scene, product partially out of high-quality packaging, natural indoor morning light, organic home feel.",
+  
+  // Ads Studio
+  'web-banner': "Wide landscape e-commerce web banner, professional marketing layout, clean space for text, high-resolution commercial graphics.",
+  'youtube-thumbnail': "Vibrant high-contrast YouTube thumbnail style, bold colors, expressive composition, attention-grabbing visual elements.",
+  'social-feed': "Aesthetic Instagram feed photography, lifestyle branding, trendy color grading, consistent social media visual language."
+};
+
 const AngleBadge = ({ label }: { label: string }) => (
   <span className="absolute top-4 left-4 z-10 bg-black/60 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border border-white/20">
     {label}
   </span>
 );
 
-// Komponen Lightbox Terpisah untuk menghindari TS2367
 const Lightbox: React.FC<{ 
   images: {url: string}[]; 
   index: number | null; 
@@ -62,9 +80,6 @@ const Lightbox: React.FC<{
         className="max-w-[90vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/10" 
         alt="Full Preview"
        />
-       <div className="absolute bottom-10 text-white font-black uppercase tracking-widest text-xs bg-black/50 px-6 py-3 rounded-full border border-white/10">
-         Image {index + 1} of {images.length}
-       </div>
     </div>
   );
 };
@@ -74,7 +89,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   const [bgRef, setBgRef] = useState<UploadedImage[]>([]);
   const [faceSource, setFaceSource] = useState<UploadedImage[]>([]);
   const [prompt, setPrompt] = useState("");
-  const [subMode, setSubMode] = useState("default");
+  const [subMode, setSubMode] = useState("product-shot");
   const [style, setStyle] = useState("Studio");
   const [activeAngle, setActiveAngle] = useState("D-3Q"); 
   const [ratio, setRatio] = useState<AspectRatio>(AspectRatio.PORTRAIT);
@@ -103,45 +118,31 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     }
   }, [history]);
 
+  // Reset Sub-Mode saat Navigasi Berubah
   useEffect(() => {
     setResults([]);
     setTextContent("");
     setImages([]);
     setBgRef([]);
-    setFaceSource([]);
     setPrompt("");
     setError(null);
-    setIsBatchMode(false);
-    setSources([]);
     
-    const modeMap: Partial<Record<NavItem, string>> = {
-      [NavItem.COMMERCIAL]: "product-shot",
-      [NavItem.UGC]: "selfie-review",
-      [NavItem.ADS]: "web-banner",
-      [NavItem.HUMAN]: "ai-model",
-      [NavItem.MAGIC]: "faceswap",
-      [NavItem.COPYWRITER]: "analysis-script"
-    };
-    if (modeMap[activeItem]) setSubMode(modeMap[activeItem]!);
+    if (activeItem === NavItem.COMMERCIAL) setSubMode("product-shot");
+    else if (activeItem === NavItem.UGC) setSubMode("selfie-review");
+    else if (activeItem === NavItem.ADS) setSubMode("web-banner");
   }, [activeItem]);
 
   const handleGenerate = async () => {
-    if (activeItem === NavItem.MAGIC && (images.length === 0 || faceSource.length === 0)) {
-        setError("Mohon unggah foto target dan foto wajah sumber.");
-        return;
-    }
-    if (images.length === 0 && ![NavItem.SEO, NavItem.HUMAN, NavItem.LIVE, NavItem.COPYWRITER].includes(activeItem)) {
+    if (images.length === 0 && ![NavItem.SEO, NavItem.COPYWRITER].includes(activeItem)) {
         setError("Mohon unggah foto produk terlebih dahulu.");
         return;
     }
 
-    // Pro model requires explicit key selection
-    const isPro = quality === ImageQuality.HD_2K || quality === ImageQuality.ULTRA_HD_4K;
-    if (isPro) {
-      const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-      if (!hasKey) {
-        await (window as any).aistudio.openSelectKey();
-      }
+    // Cek API Key
+    const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+    if (!hasKey) {
+      await (window as any).aistudio.openSelectKey();
+      return;
     }
 
     setIsGenerating(true); 
@@ -153,28 +154,37 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         setTextContent(res.text);
         setSources(res.sources);
       } else if (activeItem === NavItem.COPYWRITER) {
-        const res = await generateCopywriting(images[0].file, "Naskah jualan");
+        const res = await generateCopywriting(images[0].file, "Naskah jualan persuasif");
         setTextContent(res);
       } else {
+        const baseSysPrompt = SUB_MODE_PROMPTS[subMode] || "";
+        const fullPrompt = `${baseSysPrompt} ${prompt}`.trim();
+
         let finalResults: {url: string, angle: string}[] = [];
         if (isBatchMode) {
           const promises = BATCH_SET.map(code => 
-            generateImage(images.map(i => i.file), bgRef[0]?.file || null, prompt, style, ratio, quality, code)
+            generateImage(images.map(i => i.file), bgRef[0]?.file || null, fullPrompt, style, ratio, quality, code)
               .then(url => ({ url, angle: code }))
           );
           finalResults = await Promise.all(promises);
         } else {
-          const url = await generateImage(images.map(i => i.file), bgRef[0]?.file || null, prompt, style, ratio, quality, activeAngle);
+          const url = await generateImage(images.map(i => i.file), bgRef[0]?.file || null, fullPrompt, style, ratio, quality, activeAngle);
           finalResults = [{ url, angle: activeAngle }];
         }
         setResults(finalResults);
-        const newHistory = finalResults.map(r => ({ ...r, id: Math.random().toString(), timestamp: Date.now(), mode: subMode, category: activeItem }));
+        const newHistory = finalResults.map(r => ({ 
+          ...r, 
+          id: Math.random().toString(), 
+          timestamp: Date.now(), 
+          mode: subMode, 
+          category: activeItem 
+        }));
         setHistory(prev => [...newHistory, ...prev]);
       }
     } catch (e: any) {
-      if (e.message?.includes("API_KEY") || e.message?.includes("entity was not found")) {
+      if (e.message?.includes("API_KEY") || e.message?.includes("not found")) {
         await (window as any).aistudio.openSelectKey();
-        setError("API Key diperlukan. Silakan pilih API Key berbayar.");
+        setError("API Key diperlukan. Silakan klik 'Select API Key' di atas.");
       } else {
         setError(e.message || "Gagal menghasilkan gambar.");
       }
@@ -187,9 +197,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     if (activeItem === NavItem.HISTORY) return history.map(h => ({ url: h.url }));
     return results.map(r => ({ url: r.url }));
   }, [activeItem, history, results]);
-
-  const nextImage = () => setSelectedIdx(prev => prev !== null ? (prev + 1) % lightboxImages.length : null);
-  const prevImage = () => setSelectedIdx(prev => prev !== null ? (prev - 1 + lightboxImages.length) % lightboxImages.length : null);
 
   if (activeItem === NavItem.HOME) {
     return (
@@ -243,7 +250,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                 ))}
             </div>
          </div>
-         <Lightbox images={lightboxImages} index={selectedIdx} onClose={() => setSelectedIdx(null)} onNext={nextImage} onPrev={prevImage} />
+         <Lightbox images={lightboxImages} index={selectedIdx} onClose={() => setSelectedIdx(null)} onNext={() => setSelectedIdx(prev => (prev! + 1) % lightboxImages.length)} onPrev={() => setSelectedIdx(prev => (prev! - 1 + lightboxImages.length) % lightboxImages.length)} />
       </main>
     );
   }
@@ -259,8 +266,8 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
             <div className="flex items-center gap-4">
                 <div className="p-3 rounded-2xl bg-teal-500"><CheckCircle size={20} /></div>
                 <div>
-                    <h4 className="font-black text-xs uppercase tracking-widest">GenAI Studio</h4>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase">Ready for reconstruction</p>
+                    <h4 className="font-black text-xs uppercase tracking-widest">GenAI Session</h4>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase">Ready to generate</p>
                 </div>
             </div>
             <button onClick={() => (window as any).aistudio.openSelectKey()} className="px-5 py-2.5 bg-white text-slate-900 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-teal-50">Select API Key</button>
@@ -272,13 +279,46 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                   <div className="p-4 bg-teal-50 text-teal-600 rounded-2xl"><Wand2 size={28} /></div>
                   <h2 className="text-3xl font-black text-slate-900 tracking-tight">{activeItem}</h2>
                </div>
-               {![NavItem.SEO, NavItem.COPYWRITER, NavItem.MAGIC, NavItem.HOME, NavItem.HISTORY, NavItem.LEARNING].includes(activeItem) && (
-                 <button onClick={() => setIsBatchMode(!isBatchMode)} className={`flex items-center gap-3 px-6 py-3 rounded-2xl transition-all border-2 ${isBatchMode ? 'bg-teal-500 border-teal-500 text-white shadow-lg' : 'bg-white border-gray-100 text-slate-400'}`}>
-                    <LayoutGrid size={16} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Batch Mode {isBatchMode ? 'ON' : 'OFF'}</span>
-                 </button>
-               )}
             </div>
+
+            {/* SELEKSI SUB-MODE (KEMBALI LENGKAP) */}
+            {(activeItem === NavItem.COMMERCIAL || activeItem === NavItem.UGC || activeItem === NavItem.ADS) && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {activeItem === NavItem.COMMERCIAL && [
+                        { id: 'product-shot', label: 'Product Shot', icon: Box, desc: 'Foto studio mewah' },
+                        { id: 'ai-fashion', label: 'AI Fashion', icon: Shirt, desc: 'Model manusia memakai produk' },
+                        { id: 'mockup', label: 'Mockup', icon: Layers, desc: 'Integrasi desain 3D' }
+                    ].map(b => (
+                        <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500 shadow-md' : 'bg-white border-gray-100 hover:border-teal-200'}`}>
+                            <b.icon className={`mb-3 ${subMode === b.id ? 'text-teal-600' : 'text-slate-400'}`} size={20} />
+                            <div className="font-black text-[10px] uppercase tracking-widest mb-1">{b.label}</div>
+                            <div className="text-[10px] text-slate-400 font-medium">{b.desc}</div>
+                        </button>
+                    ))}
+                    {activeItem === NavItem.UGC && [
+                        { id: 'selfie-review', label: 'Selfie Review', icon: Camera, desc: 'Social proof orang asli' },
+                        { id: 'pov-hand', label: 'POV Hand', icon: Hand, desc: 'Tangan memegang produk' },
+                        { id: 'unboxing-exp', label: 'Unboxing', icon: PackageOpen, desc: 'Kesan paket baru sampai' }
+                    ].map(b => (
+                        <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500 shadow-md' : 'bg-white border-gray-100 hover:border-teal-200'}`}>
+                            <b.icon className={`mb-3 ${subMode === b.id ? 'text-teal-600' : 'text-slate-400'}`} size={20} />
+                            <div className="font-black text-[10px] uppercase tracking-widest mb-1">{b.label}</div>
+                            <div className="text-[10px] text-slate-400 font-medium">{b.desc}</div>
+                        </button>
+                    ))}
+                    {activeItem === NavItem.ADS && [
+                        { id: 'web-banner', label: 'Web Banner', icon: Monitor, desc: 'Header Shopee/Tokopedia' },
+                        { id: 'youtube-thumbnail', label: 'YouTube Thumbnail', icon: Youtube, desc: 'Cover video kontras' },
+                        { id: 'social-feed', label: 'Social Feed', icon: Instagram, desc: 'Konten feed IG/TikTok' }
+                    ].map(b => (
+                        <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500 shadow-md' : 'bg-white border-gray-100 hover:border-teal-200'}`}>
+                            <b.icon className={`mb-3 ${subMode === b.id ? 'text-teal-600' : 'text-slate-400'}`} size={20} />
+                            <div className="font-black text-[10px] uppercase tracking-widest mb-1">{b.label}</div>
+                            <div className="text-[10px] text-slate-400 font-medium">{b.desc}</div>
+                        </button>
+                    ))}
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
               <ImageUploader images={images} setImages={setImages} maxFiles={4} label="Foto Produk Utama" compact />
@@ -286,21 +326,9 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
             </div>
 
             <div className="space-y-10">
-                {!isBatchMode && ![NavItem.SEO, NavItem.COPYWRITER, NavItem.LIVE].includes(activeItem) && (
-                    <div className="space-y-4">
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Angle</label>
-                        <div className="flex flex-wrap gap-2">
-                            {PRO_ANGLES.map(a => (
-                                <button key={a.code} onClick={() => setActiveAngle(a.code)} className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase border-2 transition-all ${activeAngle === a.code ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-gray-100 text-slate-400'}`}>
-                                    {a.name}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
                 <div className="space-y-4">
                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Custom Instruction</label>
-                    <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Misal: 'Sepatu lari di atas batu granit dengan pencahayaan dramatis'..." className="w-full h-24 bg-gray-50 border-2 border-gray-100 p-6 rounded-[2rem] outline-none focus:border-teal-500 text-sm" />
+                    <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Misal: 'Sepatu lari di atas batu granit dengan pencahayaan dramatis'..." className="w-full h-24 bg-gray-50 border-2 border-gray-100 p-6 rounded-[2rem] outline-none focus:border-teal-500 text-sm font-medium" />
                 </div>
                 <div className="flex gap-4">
                   <select value={quality} onChange={e => setQuality(e.target.value as ImageQuality)} className="flex-1 bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-xs font-black uppercase">
@@ -316,10 +344,10 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                 </div>
                 <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-8 rounded-[2.5rem] font-black text-white text-xl flex items-center justify-center gap-4 transition-all ${isGenerating ? 'bg-slate-400' : 'bg-teal-500 hover:bg-teal-600 shadow-2xl'}`}>
                     {isGenerating ? <Loader2 className="animate-spin" /> : <Zap size={24} />}
-                    <span>{isGenerating ? 'PROCESSING...' : isBatchMode ? 'GENERATE 6 PRO SHOTS' : 'START GENERATION'}</span>
+                    <span>{isGenerating ? 'PROCESSING...' : 'START GENERATION'}</span>
                 </button>
             </div>
-            {error && <div className="p-5 bg-red-50 text-red-500 rounded-2xl font-bold text-xs text-center">{error}</div>}
+            {error && <div className="p-5 bg-red-50 text-red-500 rounded-2xl font-bold text-xs text-center border border-red-100">{error}</div>}
         </div>
 
         {(results.length > 0 || textContent) && (
@@ -329,7 +357,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                   <button onClick={() => {setResults([]); setTextContent("");}} className="text-slate-300 hover:text-red-500"><X size={32} /></button>
               </div>
               {results.length > 0 ? (
-                 <div className={`grid gap-8 ${isBatchMode ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
+                 <div className="grid gap-8 grid-cols-1">
                     {results.map((res, i) => (
                       <div key={i} className="group relative rounded-[2rem] overflow-hidden border-4 border-gray-50 bg-slate-50">
                          <AngleBadge label={res.angle} />
@@ -345,7 +373,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
           </div>
         )}
       </div>
-      <Lightbox images={lightboxImages} index={selectedIdx} onClose={() => setSelectedIdx(null)} onNext={nextImage} onPrev={prevImage} />
+      <Lightbox images={lightboxImages} index={selectedIdx} onClose={() => setSelectedIdx(null)} onNext={() => setSelectedIdx(prev => (prev! + 1) % lightboxImages.length)} onPrev={() => setSelectedIdx(prev => (prev! - 1 + lightboxImages.length) % lightboxImages.length)} />
     </main>
   );
 };
