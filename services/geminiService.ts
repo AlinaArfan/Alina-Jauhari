@@ -51,22 +51,25 @@ export const generateImage = async (
     config.imageConfig.imageSize = quality;
   }
 
-  // Enhanced Instruction for High Fidelity
+  // MAX ACCURACY PROMPT TEMPLATE
   const coreInstruction = `
-    TASK: Professional Product Reconstruction.
-    ROLE: Commercial Photographer.
-    SUBJECT: Maintain 100% geometric fidelity of the product in the provided photos.
-    ENVIRONMENT: ${systemPrompt}.
-    USER_DESC: ${userPrompt}.
-    CAMERA_ANGLE: ${angleDesc}.
-    STYLE: Photorealistic, 8k, highly detailed textures, soft commercial lighting.
-    RESTRICTIONS: No text, no distorted shapes, no artifacts, no mannequins unless specified.
+    TASK: HIGH-FIDELITY PRODUCT RECONSTRUCTION.
+    SCENE CONTEXT: ${systemPrompt}.
+    USER REQUEST: ${userPrompt}.
+    CAMERA ANGLE: ${angleDesc}.
+    
+    CRITICAL RULES FOR ACCURACY:
+    1. SUBJECT INTEGRITY: Use the provided source images as the absolute reference for the product's shape, logo, color, and texture. DO NOT alter the product's branding or physical dimensions.
+    2. LIGHTING: Apply professional commercial lighting that matches the "SCENE CONTEXT". Ensure realistic shadows and reflections that ground the product in the environment.
+    3. COMPOSITION: Center the product. If "POV" is mentioned, ensure the hands look natural and the perspective is first-person.
+    4. QUALITY: Photorealistic, 8k resolution, sharp focus on the product, cinematic depth of field.
+    5. NEGATIVE: Avoid distorted text, extra limbs, floating objects, or cartoonish aesthetics.
   `.trim();
 
   const parts = [
-    { text: "CORE PRODUCT REFERENCE (CRITICAL):" },
+    { text: "SOURCE PRODUCT IMAGES (FOR RECONSTRUCTION):" },
     ...subjectParts,
-    ...(referencePart ? [{ text: "ENVIRONMENT/STYLE REFERENCE (USE THIS BACKGROUND):" }, referencePart] : []),
+    ...(referencePart ? [{ text: "STYLE/ENVIRONMENT REFERENCE:" }, referencePart] : []),
     { text: coreInstruction }
   ];
 
@@ -78,7 +81,7 @@ export const generateImage = async (
 
   const part = response.candidates?.[0].content?.parts?.find(p => p.inlineData);
   if (part?.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-  throw new Error("Gagal menghasilkan gambar.");
+  throw new Error("Gagal menghasilkan gambar. Coba kurangi jumlah gambar atau ganti model.");
 };
 
 export const getSEOTrends = async (productName: string): Promise<{ text: string; sources: any[] }> => {
@@ -86,7 +89,12 @@ export const getSEOTrends = async (productName: string): Promise<{ text: string;
   const ai = new GoogleGenAI({ apiKey: apiKey! });
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Analisis tren pasar untuk produk: ${productName}. Berikan data: 1. Kata kunci viral TikTok. 2. Estimasi harga kompetitor. 3. Target audiens. 4. Strategi konten video.`,
+    contents: `Analisis tren pasar terkini (2025) untuk produk: ${productName}. 
+    Sertakan:
+    - Top 5 TikTok Hashtags yang sedang viral.
+    - Analisis harga jual terlaris di Marketplace.
+    - Sudut pandang konten video yang paling banyak ditonton (Hook & Storyline).
+    - Berikan data konkret berdasarkan pencarian web.`,
     config: { tools: [{ googleSearch: {} }] }
   });
   return {
@@ -101,7 +109,7 @@ export const generateCopywriting = async (file: File, type: string): Promise<str
   const imgPart = await fileToPart(file);
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: { parts: [imgPart, { text: `Tulis ${type} yang sangat menjual untuk produk ini.` }] }
+    contents: { parts: [imgPart, { text: `Analisis produk ini secara visual, lalu tulis ${type} yang memiliki 'High Conversion Rate' dan emosional.` }] }
   });
-  return response.text || "Gagal.";
+  return response.text || "Gagal menghasilkan naskah.";
 };
