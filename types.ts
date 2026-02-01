@@ -17,8 +17,18 @@ export interface UploadedImage {
   previewUrl: string;
 }
 
+export interface HistoryItem {
+  id: string;
+  url: string;
+  angle: string;
+  timestamp: number;
+  mode: string;
+  category: string;
+}
+
 export enum NavItem {
   HOME = 'Dashboard',
+  HISTORY = 'Riwayat Galeri',
   COMMERCIAL = 'Commercial Hub',
   UGC = 'UGC Studio',
   ADS = 'Ads Studio',

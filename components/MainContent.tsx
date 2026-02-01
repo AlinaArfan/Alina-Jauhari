@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { NavItem, AspectRatio, UploadedImage, ImageQuality } from '../types';
+import { NavItem, AspectRatio, UploadedImage, ImageQuality, HistoryItem } from '../types';
 import ImageUploader from './ImageUploader';
 import LearningCenter from './LearningCenter';
 import { 
@@ -12,7 +12,7 @@ import {
   Download, Sparkles, Loader2, ShoppingBag, Box, Smartphone, 
   Star, Megaphone, Video, User, Shirt, Layers, 
   X, Maximize2, ShieldCheck, Key, Hand, Globe, CheckCircle, AlertTriangle, LayoutGrid, Camera, Zap, ChevronLeft, ChevronRight,
-  UserCircle2, Mic, Volume2, History, Play, FileText, Layout, PackageOpen, Wand2, PenTool, Focus, Compass
+  UserCircle2, Mic, Volume2, History as HistoryIcon, Play, FileText, Layout, PackageOpen, Wand2, PenTool, Focus, Compass, ArrowRight, BarChart3, Trash2, Calendar
 } from 'lucide-react';
 
 const AngleBadge = ({ label }: { label: string }) => (
@@ -29,7 +29,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   const [prompt, setPrompt] = useState("");
   const [subMode, setSubMode] = useState("default");
   const [style, setStyle] = useState("Studio");
-  const [activeAngle, setActiveAngle] = useState("D-3Q"); // Default Dynamic 3/4
+  const [activeAngle, setActiveAngle] = useState("D-3Q"); 
   const [ratio, setRatio] = useState<AspectRatio>(AspectRatio.PORTRAIT);
   const [quality, setQuality] = useState<ImageQuality>(ImageQuality.STANDARD);
   
@@ -37,6 +37,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [results, setResults] = useState<{url: string, angle: string}[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [textContent, setTextContent] = useState("");
   const [sources, setSources] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +67,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
 
   const BATCH_SET = ["ECU", "FS", "TDA", "ULA", "S-P", "D-3Q"];
 
+  // Load History & Key on Mount
   useEffect(() => {
     const checkKey = () => {
       if (localStorage.getItem('GEMINI_API_KEY')) setKeySource('local');
@@ -73,10 +75,30 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
       else if (process.env.API_KEY || import.meta.env.VITE_API_KEY) setKeySource('env');
       else setKeySource(null);
     };
+    
+    const loadHistory = () => {
+      const saved = localStorage.getItem('MAGIC_PICTURE_HISTORY');
+      if (saved) {
+        try {
+          setHistory(JSON.parse(saved));
+        } catch (e) {
+          console.error("Failed to parse history");
+        }
+      }
+    };
+
     checkKey();
+    loadHistory();
     const inv = setInterval(checkKey, 2000);
     return () => clearInterval(inv);
   }, []);
+
+  // Save History whenever it changes
+  useEffect(() => {
+    if (history.length > 0) {
+      localStorage.setItem('MAGIC_PICTURE_HISTORY', JSON.stringify(history.slice(0, 100))); // Limit to 100 items
+    }
+  }, [history]);
 
   useEffect(() => {
     setResults([]);
@@ -95,6 +117,18 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     if (activeItem === NavItem.MAGIC) setSubMode("faceswap");
     if (activeItem === NavItem.COPYWRITER) setSubMode("analysis-script");
   }, [activeItem]);
+
+  const addToHistory = (newResults: {url: string, angle: string}[]) => {
+    const newHistoryItems: HistoryItem[] = newResults.map(res => ({
+      id: Math.random().toString(36).substr(2, 9),
+      url: res.url,
+      angle: res.angle,
+      timestamp: Date.now(),
+      mode: subMode,
+      category: activeItem
+    }));
+    setHistory(prev => [...newHistoryItems, ...prev]);
+  };
 
   const handleGenerate = async () => {
     if (!keySource) { setShowKeyInput(true); return; }
@@ -146,20 +180,24 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
           sysP = "Advanced face-swap reconstruction.";
         }
 
+        let finalResults: {url: string, angle: string}[] = [];
+
         if (isBatchMode) {
           const batchPromises = BATCH_SET.map(code => {
             const angleName = PRO_ANGLES.find(a => a.code === code)?.name || code;
             return generateImage(images.map(i => i.file), bgRef.length > 0 ? bgRef[0].file : null, sysP, `Vibe: ${style}. ${prompt}`, ratio, quality, angleName)
               .then(url => ({ url, angle: code }))
           });
-          const urls = await Promise.all(batchPromises);
-          setResults(urls);
+          finalResults = await Promise.all(batchPromises);
         } else {
           const angleName = PRO_ANGLES.find(a => a.code === activeAngle)?.name || activeAngle;
           const subjectFiles = activeItem === NavItem.MAGIC ? [images[0].file, faceSource[0].file] : images.map(i => i.file);
           const url = await generateImage(subjectFiles, bgRef.length > 0 ? bgRef[0].file : null, sysP, `Vibe: ${style}. ${prompt}`, ratio, quality, angleName);
-          setResults([{ url, angle: activeAngle }]);
+          finalResults = [{ url, angle: activeAngle }];
         }
+        
+        setResults(finalResults);
+        addToHistory(finalResults);
       }
     } catch (e: any) {
       setError(e.message || "Permintaan gagal diproses.");
@@ -169,18 +207,213 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   };
 
   const nextImage = useCallback(() => {
-    if (selectedFullImageIdx !== null) setSelectedFullImageIdx((prev) => (prev! + 1) % results.length);
-  }, [selectedFullImageIdx, results.length]);
+    if (selectedFullImageIdx !== null) {
+      const currentList = activeItem === NavItem.HISTORY ? history : results;
+      setSelectedFullImageIdx((prev) => (prev! + 1) % currentList.length);
+    }
+  }, [selectedFullImageIdx, results.length, history.length, activeItem]);
 
   const prevImage = useCallback(() => {
-    if (selectedFullImageIdx !== null) setSelectedFullImageIdx((prev) => (prev! - 1 + results.length) % results.length);
-  }, [selectedFullImageIdx, results.length]);
+    if (selectedFullImageIdx !== null) {
+      const currentList = activeItem === NavItem.HISTORY ? history : results;
+      setSelectedFullImageIdx((prev) => (prev! - 1 + currentList.length) % currentList.length);
+    }
+  }, [selectedFullImageIdx, results.length, history.length, activeItem]);
+
+  const deleteHistoryItem = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setHistory(prev => {
+        const updated = prev.filter(item => item.id !== id);
+        localStorage.setItem('MAGIC_PICTURE_HISTORY', JSON.stringify(updated));
+        return updated;
+    });
+  };
+
+  // --- RENDERING LOGIC ---
+
+  // History Gallery View
+  if (activeItem === NavItem.HISTORY) {
+    return (
+      <main className="flex-1 overflow-y-auto p-6 lg:p-12 bg-gray-50/50 no-scrollbar">
+         <div className="max-w-6xl mx-auto space-y-12 animate-in fade-in duration-700">
+            <div className="flex justify-between items-center">
+                <div className="space-y-2">
+                    <h1 className="text-4xl font-black text-slate-900">Riwayat Galeri</h1>
+                    <p className="text-slate-500">Koleksi hasil karya Anda yang tersimpan secara lokal.</p>
+                </div>
+                {history.length > 0 && (
+                    <button 
+                        onClick={() => { if(confirm("Hapus semua riwayat?")) { setHistory([]); localStorage.removeItem('MAGIC_PICTURE_HISTORY'); } }}
+                        className="flex items-center gap-2 px-6 py-3 bg-red-50 text-red-500 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
+                    >
+                        <Trash2 size={14} /> Hapus Semua
+                    </button>
+                )}
+            </div>
+
+            {history.length === 0 ? (
+                <div className="bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-gray-200">
+                    <div className="w-20 h-20 bg-gray-50 text-gray-300 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <HistoryIcon size={40} />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-400 mb-2">Belum ada riwayat</h3>
+                    <p className="text-gray-400 max-w-xs mx-auto mb-8">Mulai generate gambar di studio untuk melihat riwayat koleksi Anda di sini.</p>
+                    <button onClick={() => setActiveItem(NavItem.COMMERCIAL)} className="bg-teal-500 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">Buka Studio</button>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {history.map((item, i) => (
+                        <div key={item.id} className="group relative bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-lg hover:shadow-2xl transition-all hover:-translate-y-1">
+                            <img src={item.url} className="w-full aspect-[3/4] object-cover" alt="History" />
+                            <AngleBadge label={item.angle} />
+                            
+                            <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-4 p-6">
+                                <div className="flex gap-4">
+                                    <button onClick={() => setSelectedFullImageIdx(i)} className="p-4 bg-white rounded-xl text-slate-900 hover:scale-110 transition-transform"><Maximize2 size={20} /></button>
+                                    <a href={item.url} download={`magic-history-${item.id}.png`} className="p-4 bg-teal-500 rounded-xl text-white hover:scale-110 transition-transform"><Download size={20} /></a>
+                                </div>
+                                <button onClick={(e) => deleteHistoryItem(item.id, e)} className="p-3 bg-red-500/20 text-red-100 hover:bg-red-500 rounded-xl text-[10px] font-black uppercase transition-all">Hapus Permanen</button>
+                            </div>
+
+                            <div className="p-4 border-t border-gray-50 flex justify-between items-center">
+                                <div className="space-y-1">
+                                    <div className="text-[10px] font-black uppercase text-teal-600 tracking-widest">{item.category}</div>
+                                    <div className="text-[9px] text-gray-400 font-medium flex items-center gap-1">
+                                        <Calendar size={10} /> {new Date(item.timestamp).toLocaleDateString()}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+         </div>
+
+         {/* Lightbox for History */}
+         {selectedFullImageIdx !== null && history[selectedFullImageIdx] && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-2xl animate-in fade-in" onClick={() => setSelectedFullImageIdx(null)}>
+                <div className="absolute top-8 inset-x-0 px-8 flex justify-between items-center pointer-events-none">
+                    <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl border border-white/20">
+                        <span className="text-white font-black text-xs uppercase tracking-widest">
+                            {history[selectedFullImageIdx].category} - {history[selectedFullImageIdx].angle}
+                        </span>
+                    </div>
+                    <button onClick={() => setSelectedFullImageIdx(null)} className="pointer-events-auto bg-white/10 text-white p-4 rounded-2xl hover:bg-white/20"><X size={24} /></button>
+                </div>
+                <div className="relative max-w-[90vw] max-h-[85vh] flex items-center justify-center" onClick={e => e.stopPropagation()}>
+                    <button onClick={prevImage} className="absolute -left-20 lg:-left-32 p-6 bg-white/5 hover:bg-white/10 rounded-full text-white"><ChevronLeft size={32} /></button>
+                    <button onClick={nextImage} className="absolute -right-20 lg:-right-32 p-6 bg-white/5 hover:bg-white/10 rounded-full text-white"><ChevronRight size={32} /></button>
+                    <img src={history[selectedFullImageIdx].url} className="w-full h-full max-h-[80vh] object-contain rounded-3xl shadow-2xl" />
+                </div>
+            </div>
+          )}
+      </main>
+    );
+  }
+
+  // Dashboard View for HOME
+  if (activeItem === NavItem.HOME) {
+    return (
+      <main className="flex-1 overflow-y-auto p-6 lg:p-12 bg-gray-50/50 no-scrollbar">
+        <div className="max-w-6xl mx-auto space-y-12 animate-in fade-in duration-700">
+          <div className="flex flex-col md:flex-row justify-between items-end gap-6">
+            <div className="space-y-4">
+              <h1 className="text-5xl font-black text-slate-900 tracking-tighter">Selamat Datang di <span className="text-teal-500">Magic Picture</span></h1>
+              <p className="text-slate-500 text-lg max-w-xl">AI Engine tercanggih untuk kebutuhan konten Affiliate Marketer. Pilih studio di bawah untuk mulai berkreasi.</p>
+            </div>
+            <div className="flex gap-4">
+               <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-xl flex items-center gap-4">
+                  <div className="p-3 bg-teal-50 text-teal-600 rounded-xl"><Zap size={24} /></div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-slate-400">Total Generasi</p>
+                    <p className="text-xl font-black text-slate-900">{history.length} Gambar</p>
+                  </div>
+               </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+             {[
+               { id: NavItem.COMMERCIAL, label: 'Commercial Hub', desc: 'Ubah foto produk biasa jadi studio premium.', icon: ShoppingBag, color: 'bg-blue-500' },
+               { id: NavItem.UGC, label: 'UGC Studio', desc: 'Buat testimoni selfie & POV realistis.', icon: Smartphone, color: 'bg-teal-500' },
+               { id: NavItem.ADS, label: 'Ads Studio', desc: 'Banner promo & thumbnail YouTube otomatis.', icon: Megaphone, color: 'bg-orange-500' }
+             ].map(item => (
+               <button 
+                key={item.id} 
+                onClick={() => setActiveItem(item.id)}
+                className="group relative bg-white p-10 rounded-[3rem] text-left border border-gray-100 shadow-xl hover:shadow-2xl hover:-translate-y-2 transition-all overflow-hidden"
+               >
+                  <div className={`w-16 h-16 ${item.color} text-white rounded-[1.5rem] flex items-center justify-center mb-8 shadow-lg group-hover:scale-110 transition-transform`}>
+                    <item.icon size={32} />
+                  </div>
+                  <h3 className="text-2xl font-black text-slate-900 mb-3">{item.label}</h3>
+                  <p className="text-slate-500 text-sm leading-relaxed mb-8">{item.desc}</p>
+                  <div className="flex items-center gap-2 text-teal-600 font-black text-[10px] uppercase tracking-widest">
+                    Buka Studio <ArrowRight size={14} />
+                  </div>
+               </button>
+             ))}
+          </div>
+
+          {/* Recent Activity Section in Dashboard */}
+          {history.length > 0 && (
+              <div className="space-y-6">
+                  <div className="flex justify-between items-center px-4">
+                      <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                          <HistoryIcon className="text-teal-500" size={20} /> Aktivitas Terakhir
+                      </h3>
+                      <button onClick={() => setActiveItem(NavItem.HISTORY)} className="text-[10px] font-black text-teal-600 uppercase tracking-widest hover:underline flex items-center gap-2">Lihat Semua <ArrowRight size={12} /></button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                      {history.slice(0, 5).map((item) => (
+                          <div key={item.id} className="aspect-square rounded-3xl overflow-hidden border-4 border-white shadow-md hover:scale-105 transition-transform cursor-pointer relative group" onClick={() => setActiveItem(NavItem.HISTORY)}>
+                              <img src={item.url} className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <Maximize2 className="text-white" size={20} />
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          )}
+
+          <div className="bg-slate-900 rounded-[3rem] p-12 text-white flex flex-col md:flex-row items-center justify-between gap-10 overflow-hidden relative">
+              <div className="absolute top-0 left-0 p-12 opacity-5 pointer-events-none"><BarChart3 size={200} /></div>
+              <div className="space-y-6 relative z-10 max-w-xl">
+                 <h2 className="text-3xl font-black">Market Trends 2025</h2>
+                 <p className="text-slate-400 leading-relaxed">Gunakan alat analisis tren kami untuk mengetahui produk apa yang sedang viral di TikTok & Shopee sebelum Anda membuat konten.</p>
+                 <button onClick={() => setActiveItem(NavItem.SEO)} className="px-8 py-4 bg-white text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-teal-500 hover:text-white transition-all">Lihat Tren Sekarang</button>
+              </div>
+              <div className="grid grid-cols-2 gap-4 relative z-10">
+                 <div className="bg-white/5 backdrop-blur-md p-6 rounded-[2rem] border border-white/10 text-center">
+                    <p className="text-teal-400 font-black text-2xl mb-1">98%</p>
+                    <p className="text-[9px] font-black uppercase opacity-60">Akurasi Fidelity</p>
+                 </div>
+                 <div className="bg-white/5 backdrop-blur-md p-6 rounded-[2rem] border border-white/10 text-center">
+                    <p className="text-blue-400 font-black text-2xl mb-1">0.8s</p>
+                    <p className="text-[9px] font-black uppercase opacity-60">Waktu Proses</p>
+                 </div>
+              </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // Learning Center View
+  if (activeItem === NavItem.LEARNING) {
+    return (
+      <main className="flex-1 overflow-y-auto p-6 lg:p-12 bg-gray-50/50 no-scrollbar">
+        <LearningCenter />
+      </main>
+    );
+  }
 
   return (
     <main className="flex-1 overflow-y-auto p-6 lg:p-12 bg-gray-50/50 no-scrollbar">
       <div className="max-w-6xl mx-auto space-y-10 pb-40">
         
-        {/* Header */}
+        {/* Header Key Monitor */}
         <div className="bg-slate-900 text-white p-6 rounded-[2.5rem] flex items-center justify-between shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8 opacity-5"><ShieldCheck size={100} /></div>
             <div className="flex items-center gap-4 relative z-10">
@@ -242,45 +475,52 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
 
             <div className="space-y-12">
                 
-                {activeItem === NavItem.MAGIC ? (
+                {/* Image Uploaders Section */}
+                {(activeItem !== NavItem.SEO && activeItem !== NavItem.LIVE) && (
+                   activeItem === NavItem.MAGIC ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                          <ImageUploader images={images} setImages={setImages} maxFiles={1} label="Foto Target" description="Orang yang akan diganti wajahnya." compact />
                          <ImageUploader images={faceSource} setImages={setFaceSource} maxFiles={1} label="Wajah Sumber" description="Wajah yang akan ditempel." compact />
                     </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                        <ImageUploader images={images} setImages={setImages} maxFiles={4} label="Foto Produk Utama" compact />
-                        {activeItem !== NavItem.COPYWRITER && <ImageUploader images={bgRef} setImages={setBgRef} maxFiles={1} label="Referensi Background (Opsional)" compact />}
-                    </div>
+                  ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                          <ImageUploader images={images} setImages={setImages} maxFiles={4} label="Foto Produk Utama" compact />
+                          {activeItem !== NavItem.COPYWRITER && <ImageUploader images={bgRef} setImages={setBgRef} maxFiles={1} label="Referensi Background (Opsional)" compact />}
+                      </div>
+                  )
                 )}
 
-                <div className="space-y-6">
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Tipe Konten</label>
-                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                        {activeItem === NavItem.COMMERCIAL && [
-                            { id: 'product-shot', label: 'Product Shot', icon: Box },
-                            { id: 'ai-fashion', label: 'AI Fashion', icon: Shirt },
-                            { id: 'mockup', label: 'Mockup', icon: Layers }
-                        ].map(b => (
-                            <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500' : 'bg-white border-gray-100'}`}>
-                                <b.icon className={`mb-3 ${subMode === b.id ? 'text-teal-600' : 'text-slate-400'}`} />
-                                <div className="font-black text-[11px] uppercase tracking-widest">{b.label}</div>
-                            </button>
-                        ))}
-                        {activeItem === NavItem.UGC && [
-                            { id: 'selfie-review', label: 'Selfie Review', icon: Camera },
-                            { id: 'pov-hand', label: 'POV Hand', icon: Hand },
-                            { id: 'unboxing-exp', label: 'Unboxing Exp', icon: PackageOpen }
-                        ].map(b => (
-                            <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500' : 'bg-white border-gray-100'}`}>
-                                <b.icon className={`mb-3 ${subMode === b.id ? 'text-teal-600' : 'text-slate-400'}`} />
-                                <div className="font-black text-[11px] uppercase tracking-widest">{b.label}</div>
-                            </button>
-                        ))}
-                    </div>
-                </div>
+                {/* Sub-Mode Selection - Only show if current item has submodes */}
+                {(activeItem === NavItem.COMMERCIAL || activeItem === NavItem.UGC) && (
+                  <div className="space-y-6">
+                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Tipe Konten</label>
+                      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                          {activeItem === NavItem.COMMERCIAL && [
+                              { id: 'product-shot', label: 'Product Shot', icon: Box },
+                              { id: 'ai-fashion', label: 'AI Fashion', icon: Shirt },
+                              { id: 'mockup', label: 'Mockup', icon: Layers }
+                          ].map(b => (
+                              <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500' : 'bg-white border-gray-100'}`}>
+                                  <b.icon className={`mb-3 ${subMode === b.id ? 'text-teal-600' : 'text-slate-400'}`} />
+                                  <div className="font-black text-[11px] uppercase tracking-widest">{b.label}</div>
+                              </button>
+                          ))}
+                          {activeItem === NavItem.UGC && [
+                              { id: 'selfie-review', label: 'Selfie Review', icon: Camera },
+                              { id: 'pov-hand', label: 'POV Hand', icon: Hand },
+                              { id: 'unboxing-exp', label: 'Unboxing Exp', icon: PackageOpen }
+                          ].map(b => (
+                              <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500' : 'bg-white border-gray-100'}`}>
+                                  <b.icon className={`mb-3 ${subMode === b.id ? 'text-teal-600' : 'text-slate-400'}`} />
+                                  <div className="font-black text-[11px] uppercase tracking-widest">{b.label}</div>
+                              </button>
+                          ))}
+                      </div>
+                  </div>
+                )}
 
-                {!isBatchMode && activeItem !== NavItem.SEO && activeItem !== NavItem.COPYWRITER && (
+                {/* Pro Shot Angles */}
+                {!isBatchMode && activeItem !== NavItem.SEO && activeItem !== NavItem.COPYWRITER && activeItem !== NavItem.LIVE && (
                    <div className="space-y-6 animate-in slide-in-from-bottom">
                       <div className="flex items-center gap-3 ml-2">
                         <Focus size={14} className="text-teal-500" />
@@ -301,7 +541,8 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                    </div>
                 )}
 
-                {activeItem !== NavItem.SEO && activeItem !== NavItem.COPYWRITER && (
+                {/* Environment Selection */}
+                {activeItem !== NavItem.SEO && activeItem !== NavItem.COPYWRITER && activeItem !== NavItem.LIVE && (
                     <div className="space-y-6 animate-in slide-in-from-bottom">
                         <div className="flex items-center gap-3 ml-2">
                             <Compass size={14} className="text-teal-500" />
@@ -321,31 +562,34 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                     </div>
                 )}
 
-                {activeItem !== NavItem.SEO && (
+                {/* Action Area */}
+                {activeItem !== NavItem.LIVE && (
                    <div className="space-y-10">
                       <div className="space-y-4">
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Deskripsi Kustom</label>
-                        <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Misal: Tambahkan bunga di samping, pencahayaan dramatis..." className="w-full h-24 bg-gray-50 border-2 border-gray-100 p-6 rounded-[2rem] outline-none focus:border-teal-500 text-sm font-medium" />
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Deskripsi Kustom / Produk</label>
+                        <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={activeItem === NavItem.SEO ? "Masukkan nama produk untuk analisis tren..." : "Misal: Tambahkan bunga di samping, pencahayaan dramatis..."} className="w-full h-24 bg-gray-50 border-2 border-gray-100 p-6 rounded-[2rem] outline-none focus:border-teal-500 text-sm font-medium" />
                       </div>
 
-                      <div className="flex flex-wrap gap-8 items-center border-t border-gray-50 pt-10">
-                         <div className="space-y-3">
-                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">Ratio</span>
-                            <div className="flex gap-2">
-                               {[AspectRatio.PORTRAIT, AspectRatio.SQUARE, AspectRatio.LANDSCAPE].map(r => (
-                                 <button key={r} onClick={() => setRatio(r)} className={`px-4 py-2 rounded-lg text-[10px] font-black border ${ratio === r ? 'bg-slate-900 text-white' : 'bg-white border-gray-100 text-slate-400'}`}>{r}</button>
-                               ))}
-                            </div>
-                         </div>
-                         <div className="space-y-3">
-                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">Quality</span>
-                            <div className="flex gap-2">
-                               {[ImageQuality.STANDARD, ImageQuality.HD_2K, ImageQuality.ULTRA_HD_4K].map(q => (
-                                 <button key={q} onClick={() => setQuality(q)} className={`px-4 py-2 rounded-lg text-[10px] font-black border ${quality === q ? 'bg-teal-500 text-white' : 'bg-white border-gray-100 text-slate-400'}`}>{q}</button>
-                               ))}
-                            </div>
-                         </div>
-                      </div>
+                      {activeItem !== NavItem.SEO && activeItem !== NavItem.COPYWRITER && (
+                        <div className="flex flex-wrap gap-8 items-center border-t border-gray-50 pt-10">
+                          <div className="space-y-3">
+                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">Ratio</span>
+                              <div className="flex gap-2">
+                                {[AspectRatio.PORTRAIT, AspectRatio.SQUARE, AspectRatio.LANDSCAPE].map(r => (
+                                  <button key={r} onClick={() => setRatio(r)} className={`px-4 py-2 rounded-lg text-[10px] font-black border ${ratio === r ? 'bg-slate-900 text-white' : 'bg-white border-gray-100 text-slate-400'}`}>{r}</button>
+                                ))}
+                              </div>
+                          </div>
+                          <div className="space-y-3">
+                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">Quality</span>
+                              <div className="flex gap-2">
+                                {[ImageQuality.STANDARD, ImageQuality.HD_2K, ImageQuality.ULTRA_HD_4K].map(q => (
+                                  <button key={q} onClick={() => setQuality(q)} className={`px-4 py-2 rounded-lg text-[10px] font-black border ${quality === q ? 'bg-teal-500 text-white' : 'bg-white border-gray-100 text-slate-400'}`}>{q}</button>
+                                ))}
+                              </div>
+                          </div>
+                        </div>
+                      )}
 
                       <button 
                         onClick={handleGenerate} 
@@ -353,7 +597,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                         className={`w-full py-10 rounded-[3rem] font-black text-white text-2xl flex items-center justify-center gap-6 transition-all ${isGenerating ? 'bg-slate-400 scale-[0.98]' : 'bg-teal-500 hover:bg-teal-600 shadow-3xl'}`}
                       >
                         {isGenerating ? <Loader2 className="w-10 h-10 animate-spin" /> : <Zap className="w-10 h-10 fill-current" />}
-                        <span>{isGenerating ? 'GENERATING...' : isBatchMode ? 'GENERATE 6 PRO SHOTS' : 'MULAI GENERATE'}</span>
+                        <span>{isGenerating ? 'GENERATING...' : isBatchMode ? 'GENERATE 6 PRO SHOTS' : 'MULAI PROSES'}</span>
                       </button>
                    </div>
                 )}
@@ -363,6 +607,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
           </div>
         </div>
 
+        {/* Results Area (Current Generation) */}
         {(results.length > 0 || textContent) && (
           <div className="bg-white p-10 lg:p-16 rounded-[4rem] shadow-2xl border border-gray-100 animate-in fade-in">
               <div className="flex items-center justify-between mb-12 border-b pb-8">
@@ -388,6 +633,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         )}
       </div>
 
+      {/* Lightbox for viewing results */}
       {selectedFullImageIdx !== null && results[selectedFullImageIdx] && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-2xl animate-in fade-in" onClick={() => setSelectedFullImageIdx(null)}>
            <div className="absolute top-8 inset-x-0 px-8 flex justify-between items-center pointer-events-none">
