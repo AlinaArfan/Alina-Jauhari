@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { NavItem, AspectRatio, UploadedImage, ImageQuality, HistoryItem } from '../types';
 import ImageUploader from './ImageUploader';
 import LearningCenter from './LearningCenter';
@@ -14,7 +14,6 @@ import {
   Shirt, Layers, Hand, PackageOpen, Wand2, Focus, Compass, ArrowRight, BarChart3, Trash2, Calendar, History as HistoryIcon
 } from 'lucide-react';
 
-// Konstanta dipindahkan ke luar komponen agar referensi stabil
 const PRO_ANGLES = [
   { code: "ECU", name: "Extreme Close-Up" },
   { code: "BMS", name: "Big Medium Shot" },
@@ -40,8 +39,37 @@ const AngleBadge = ({ label }: { label: string }) => (
   </span>
 );
 
+// Komponen Lightbox Terpisah untuk menghindari TS2367
+const Lightbox: React.FC<{ 
+  images: {url: string}[]; 
+  index: number | null; 
+  onClose: () => void;
+  onNext: () => void;
+  onPrev: () => void;
+}> = ({ images, index, onClose, onNext, onPrev }) => {
+  if (index === null || !images[index]) return null;
+  
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-2xl" onClick={onClose}>
+       <button onClick={(e) => { e.stopPropagation(); onPrev(); }} className="absolute left-8 p-6 text-white hover:text-teal-400 transition-colors">
+         <ChevronLeft size={64} />
+       </button>
+       <button onClick={(e) => { e.stopPropagation(); onNext(); }} className="absolute right-8 p-6 text-white hover:text-teal-400 transition-colors">
+         <ChevronRight size={64} />
+       </button>
+       <img 
+        src={images[index].url} 
+        className="max-w-[90vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/10" 
+        alt="Full Preview"
+       />
+       <div className="absolute bottom-10 text-white font-black uppercase tracking-widest text-xs bg-black/50 px-6 py-3 rounded-full border border-white/10">
+         Image {index + 1} of {images.length}
+       </div>
+    </div>
+  );
+};
+
 const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) => void }> = ({ activeItem, setActiveItem }) => {
-  // States
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [bgRef, setBgRef] = useState<UploadedImage[]>([]);
   const [faceSource, setFaceSource] = useState<UploadedImage[]>([]);
@@ -60,27 +88,21 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   const [sources, setSources] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   
-  const [selectedFullImageIdx, setSelectedFullImageIdx] = useState<number | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
-  // Load Initial Data
   useEffect(() => {
-    const loadHistory = () => {
-      const saved = localStorage.getItem('MAGIC_PICTURE_HISTORY');
-      if (saved) {
-        try { setHistory(JSON.parse(saved)); } catch (e) { console.error(e); }
-      }
-    };
-    loadHistory();
+    const saved = localStorage.getItem('MAGIC_PICTURE_HISTORY');
+    if (saved) {
+      try { setHistory(JSON.parse(saved)); } catch (e) { console.error(e); }
+    }
   }, []);
 
-  // Sync History
   useEffect(() => {
     if (history.length > 0) {
       localStorage.setItem('MAGIC_PICTURE_HISTORY', JSON.stringify(history.slice(0, 100)));
     }
   }, [history]);
 
-  // Reset on Menu Change
   useEffect(() => {
     setResults([]);
     setTextContent("");
@@ -103,29 +125,17 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     if (modeMap[activeItem]) setSubMode(modeMap[activeItem]!);
   }, [activeItem]);
 
-  const addToHistory = (newResults: {url: string, angle: string}[]) => {
-    const newHistoryItems: HistoryItem[] = newResults.map(res => ({
-      id: Math.random().toString(36).substr(2, 9),
-      url: res.url,
-      angle: res.angle,
-      timestamp: Date.now(),
-      mode: subMode,
-      category: activeItem
-    }));
-    setHistory(prev => [...newHistoryItems, ...prev]);
-  };
-
   const handleGenerate = async () => {
     if (activeItem === NavItem.MAGIC && (images.length === 0 || faceSource.length === 0)) {
         setError("Mohon unggah foto target dan foto wajah sumber.");
         return;
     }
-    if (images.length === 0 && ![NavItem.SEO, NavItem.HUMAN, NavItem.LIVE].includes(activeItem)) {
+    if (images.length === 0 && ![NavItem.SEO, NavItem.HUMAN, NavItem.LIVE, NavItem.COPYWRITER].includes(activeItem)) {
         setError("Mohon unggah foto produk terlebih dahulu.");
         return;
     }
 
-    // Check mandatory API key selection for Pro models
+    // Pro model requires explicit key selection
     const isPro = quality === ImageQuality.HD_2K || quality === ImageQuality.ULTRA_HD_4K;
     if (isPro) {
       const hasKey = await (window as any).aistudio.hasSelectedApiKey();
@@ -136,7 +146,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
 
     setIsGenerating(true); 
     setError(null); 
-    setResults([]);
     
     try {
       if (activeItem === NavItem.SEO) {
@@ -144,64 +153,44 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         setTextContent(res.text);
         setSources(res.sources);
       } else if (activeItem === NavItem.COPYWRITER) {
-        if (subMode === 'analysis-script') {
-            const res = await generateCopywriting(images[0].file, "Naskah jualan persuasif untuk video pendek");
-            setTextContent(res);
-        } else {
-            setTextContent("Audio simulasi siap.");
-        }
+        const res = await generateCopywriting(images[0].file, "Naskah jualan");
+        setTextContent(res);
       } else {
-        let sysP = `Studio style: ${style}. ${prompt}`;
         let finalResults: {url: string, angle: string}[] = [];
-
         if (isBatchMode) {
-          const batchPromises = BATCH_SET.map(code => {
-            const angleName = PRO_ANGLES.find(a => a.code === code)?.name || code;
-            return generateImage(images.map(i => i.file), bgRef.length > 0 ? bgRef[0].file : null, sysP, style, ratio, quality, angleName)
+          const promises = BATCH_SET.map(code => 
+            generateImage(images.map(i => i.file), bgRef[0]?.file || null, prompt, style, ratio, quality, code)
               .then(url => ({ url, angle: code }))
-          });
-          finalResults = await Promise.all(batchPromises);
+          );
+          finalResults = await Promise.all(promises);
         } else {
-          const angleName = PRO_ANGLES.find(a => a.code === activeAngle)?.name || activeAngle;
-          const subjectFiles = activeItem === NavItem.MAGIC ? [images[0].file, faceSource[0].file] : images.map(i => i.file);
-          const url = await generateImage(subjectFiles, bgRef.length > 0 ? bgRef[0].file : null, sysP, style, ratio, quality, angleName);
+          const url = await generateImage(images.map(i => i.file), bgRef[0]?.file || null, prompt, style, ratio, quality, activeAngle);
           finalResults = [{ url, angle: activeAngle }];
         }
-        
         setResults(finalResults);
-        addToHistory(finalResults);
+        const newHistory = finalResults.map(r => ({ ...r, id: Math.random().toString(), timestamp: Date.now(), mode: subMode, category: activeItem }));
+        setHistory(prev => [...newHistory, ...prev]);
       }
     } catch (e: any) {
-      if (e.message?.includes("Requested entity was not found.")) {
-          await (window as any).aistudio.openSelectKey();
-          setError("Requested entity was not found. Mohon pilih API Key berbayar yang valid.");
+      if (e.message?.includes("API_KEY") || e.message?.includes("entity was not found")) {
+        await (window as any).aistudio.openSelectKey();
+        setError("API Key diperlukan. Silakan pilih API Key berbayar.");
       } else {
-          setError(e.message || "Gagal memproses permintaan.");
+        setError(e.message || "Gagal menghasilkan gambar.");
       }
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const nextImage = useCallback(() => {
-    if (selectedFullImageIdx !== null) {
-      const currentList = activeItem === NavItem.HISTORY ? history : results;
-      if (currentList.length > 0) {
-        setSelectedFullImageIdx((prev) => (prev! + 1) % currentList.length);
-      }
-    }
-  }, [selectedFullImageIdx, results, history, activeItem]);
+  const lightboxImages = useMemo(() => {
+    if (activeItem === NavItem.HISTORY) return history.map(h => ({ url: h.url }));
+    return results.map(r => ({ url: r.url }));
+  }, [activeItem, history, results]);
 
-  const prevImage = useCallback(() => {
-    if (selectedFullImageIdx !== null) {
-      const currentList = activeItem === NavItem.HISTORY ? history : results;
-      if (currentList.length > 0) {
-        setSelectedFullImageIdx((prev) => (prev! - 1 + currentList.length) % currentList.length);
-      }
-    }
-  }, [selectedFullImageIdx, results, history, activeItem]);
+  const nextImage = () => setSelectedIdx(prev => prev !== null ? (prev + 1) % lightboxImages.length : null);
+  const prevImage = () => setSelectedIdx(prev => prev !== null ? (prev - 1 + lightboxImages.length) % lightboxImages.length : null);
 
-  // Views
   if (activeItem === NavItem.HOME) {
     return (
       <main className="flex-1 overflow-y-auto p-6 lg:p-12 bg-gray-50/50 no-scrollbar">
@@ -214,12 +203,11 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
             <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-xl flex items-center gap-4">
                 <div className="p-3 bg-teal-50 text-teal-600 rounded-xl"><Zap size={24} /></div>
                 <div>
-                <p className="text-[10px] font-black uppercase text-slate-400">Database</p>
-                <p className="text-xl font-black text-slate-900">{history.length} Saved</p>
+                  <p className="text-[10px] font-black uppercase text-slate-400">Database</p>
+                  <p className="text-xl font-black text-slate-900">{history.length} Saved</p>
                 </div>
             </div>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
              {[
                { id: NavItem.COMMERCIAL, label: 'Commercial Hub', icon: ShoppingBag, color: 'bg-blue-500' },
@@ -233,19 +221,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                </button>
              ))}
           </div>
-
-          {history.length > 0 && (
-              <div className="space-y-6">
-                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest ml-4">Terakhir Dibuat</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-                      {history.slice(0, 5).map((item) => (
-                          <div key={item.id} className="aspect-square rounded-[2rem] overflow-hidden border-4 border-white shadow-md cursor-pointer" onClick={() => setActiveItem(NavItem.HISTORY)}>
-                              <img src={item.url} className="w-full h-full object-cover" />
-                          </div>
-                      ))}
-                  </div>
-              </div>
-          )}
         </div>
       </main>
     );
@@ -254,39 +229,21 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   if (activeItem === NavItem.HISTORY) {
     return (
       <main className="flex-1 overflow-y-auto p-6 lg:p-12 bg-gray-50/50 no-scrollbar">
-         <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in">
-            <div className="flex justify-between items-center">
-                <h1 className="text-4xl font-black text-slate-900">Riwayat Galeri</h1>
-                {history.length > 0 && (
-                    <button onClick={() => { if(confirm("Hapus semua?")) { setHistory([]); localStorage.removeItem('MAGIC_PICTURE_HISTORY'); }}} className="text-[10px] font-black uppercase text-red-500 hover:underline">Hapus Semua</button>
-                )}
-            </div>
-
-            {history.length === 0 ? (
-                <div className="bg-white p-20 rounded-[3rem] text-center border-2 border-dashed border-gray-200">
-                    <p className="text-gray-400 font-bold uppercase tracking-widest">Belum ada riwayat</p>
-                </div>
-            ) : (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                    {history.map((item, i) => (
-                        <div key={item.id} className="group relative rounded-[2rem] overflow-hidden shadow-lg bg-white border border-gray-100">
-                            <img src={item.url} className="w-full aspect-square object-cover" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                                <button onClick={() => setSelectedFullImageIdx(i)} className="p-3 bg-white rounded-xl"><Maximize2 size={18} /></button>
-                                <a href={item.url} download className="p-3 bg-teal-500 text-white rounded-xl"><Download size={18} /></a>
-                            </div>
+         <div className="max-w-6xl mx-auto space-y-10">
+            <h1 className="text-4xl font-black text-slate-900">Riwayat Galeri</h1>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                {history.map((item, i) => (
+                    <div key={item.id} className="group relative rounded-[2rem] overflow-hidden shadow-lg bg-white border border-gray-100">
+                        <img src={item.url} className="w-full aspect-square object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                            <button onClick={() => setSelectedIdx(i)} className="p-3 bg-white rounded-xl"><Maximize2 size={18} /></button>
+                            <a href={item.url} download className="p-3 bg-teal-500 text-white rounded-xl"><Download size={18} /></a>
                         </div>
-                    ))}
-                </div>
-            )}
-         </div>
-         {selectedFullImageIdx !== null && history[selectedFullImageIdx] && (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-xl" onClick={() => setSelectedFullImageIdx(null)}>
-                <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="absolute left-10 p-6 text-white"><ChevronLeft size={48} /></button>
-                <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="absolute right-10 p-6 text-white"><ChevronRight size={48} /></button>
-                <img src={history[selectedFullImageIdx].url} className="max-w-[90vw] max-h-[85vh] object-contain rounded-2xl" />
+                    </div>
+                ))}
             </div>
-         )}
+         </div>
+         <Lightbox images={lightboxImages} index={selectedIdx} onClose={() => setSelectedIdx(null)} onNext={nextImage} onPrev={prevImage} />
       </main>
     );
   }
@@ -295,25 +252,21 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     return <main className="flex-1 overflow-y-auto p-12 bg-gray-50/50"><LearningCenter /></main>;
   }
 
-  // Default Studio View (Commercial, UGC, etc)
   return (
     <main className="flex-1 overflow-y-auto p-6 lg:p-12 bg-gray-50/50 no-scrollbar">
       <div className="max-w-6xl mx-auto space-y-10 pb-40">
         <div className="bg-slate-900 text-white p-6 rounded-[2.5rem] flex items-center justify-between shadow-xl">
             <div className="flex items-center gap-4">
-                <div className="p-3 rounded-2xl bg-teal-500">
-                  <CheckCircle size={20} />
-                </div>
+                <div className="p-3 rounded-2xl bg-teal-500"><CheckCircle size={20} /></div>
                 <div>
-                    <h4 className="font-black text-xs uppercase tracking-widest">Engine Ready</h4>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase">Powered by Gemini GenAI</p>
+                    <h4 className="font-black text-xs uppercase tracking-widest">GenAI Studio</h4>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase">Ready for reconstruction</p>
                 </div>
             </div>
-            <button onClick={() => (window as any).aistudio.openSelectKey()} className="px-5 py-2.5 bg-white text-slate-900 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-teal-50 transition-colors">Select API Key</button>
+            <button onClick={() => (window as any).aistudio.openSelectKey()} className="px-5 py-2.5 bg-white text-slate-900 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-teal-50">Select API Key</button>
         </div>
 
-        <div>
-          <div className="bg-white rounded-[3.5rem] shadow-2xl border border-gray-100 p-10 lg:p-16 space-y-12">
+        <div className="bg-white rounded-[3.5rem] shadow-2xl border border-gray-100 p-10 lg:p-16 space-y-12">
             <div className="flex items-center justify-between">
                <div className="flex items-center gap-6">
                   <div className="p-4 bg-teal-50 text-teal-600 rounded-2xl"><Wand2 size={28} /></div>
@@ -328,48 +281,14 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                {activeItem === NavItem.MAGIC ? (
-                    <>
-                        <ImageUploader images={images} setImages={setImages} maxFiles={1} label="Foto Target" compact />
-                        <ImageUploader images={faceSource} setImages={setFaceSource} maxFiles={1} label="Wajah Sumber" compact />
-                    </>
-                ) : (
-                    <>
-                        <ImageUploader images={images} setImages={setImages} maxFiles={4} label="Foto Produk Utama" compact />
-                        {activeItem !== NavItem.COPYWRITER && <ImageUploader images={bgRef} setImages={setBgRef} maxFiles={1} label="Background Ref" compact />}
-                    </>
-                )}
+              <ImageUploader images={images} setImages={setImages} maxFiles={4} label="Foto Produk Utama" compact />
+              {activeItem !== NavItem.COPYWRITER && <ImageUploader images={bgRef} setImages={setBgRef} maxFiles={1} label="Background Ref" compact />}
             </div>
-
-            {(activeItem === NavItem.COMMERCIAL || activeItem === NavItem.UGC) && (
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                    {activeItem === NavItem.COMMERCIAL && [
-                        { id: 'product-shot', label: 'Product Shot', icon: Box },
-                        { id: 'ai-fashion', label: 'AI Fashion', icon: Shirt },
-                        { id: 'mockup', label: 'Mockup', icon: Layers }
-                    ].map(b => (
-                        <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500' : 'bg-white border-gray-100'}`}>
-                            <b.icon className={`mb-3 ${subMode === b.id ? 'text-teal-600' : 'text-slate-400'}`} size={20} />
-                            <div className="font-black text-[10px] uppercase tracking-widest">{b.label}</div>
-                        </button>
-                    ))}
-                    {activeItem === NavItem.UGC && [
-                        { id: 'selfie-review', label: 'Selfie Review', icon: Camera },
-                        { id: 'pov-hand', label: 'POV Hand', icon: Hand },
-                        { id: 'unboxing-exp', label: 'Unboxing', icon: PackageOpen }
-                    ].map(b => (
-                        <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500' : 'bg-white border-gray-100'}`}>
-                            <b.icon className={`mb-3 ${subMode === b.id ? 'text-teal-600' : 'text-slate-400'}`} size={20} />
-                            <div className="font-black text-[10px] uppercase tracking-widest">{b.label}</div>
-                        </button>
-                    ))}
-                </div>
-            )}
 
             <div className="space-y-10">
                 {!isBatchMode && ![NavItem.SEO, NavItem.COPYWRITER, NavItem.LIVE].includes(activeItem) && (
                     <div className="space-y-4">
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Pro Angle Selection</label>
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Angle</label>
                         <div className="flex flex-wrap gap-2">
                             {PRO_ANGLES.map(a => (
                                 <button key={a.code} onClick={() => setActiveAngle(a.code)} className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase border-2 transition-all ${activeAngle === a.code ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-gray-100 text-slate-400'}`}>
@@ -379,109 +298,54 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                         </div>
                     </div>
                 )}
-
-                {![NavItem.SEO, NavItem.COPYWRITER, NavItem.LIVE].includes(activeItem) && (
-                    <div className="space-y-4">
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Environment</label>
-                        <div className="flex flex-wrap gap-2">
-                            {ENVIRONMENTS.map(env => (
-                                <button key={env} onClick={() => setStyle(env)} className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase border transition-all ${style === env ? 'bg-teal-500 border-teal-500 text-white' : 'bg-white border-gray-100 text-slate-400'}`}>
-                                    {env}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
                 <div className="space-y-4">
                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Custom Instruction</label>
-                    <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Detail tambahan untuk AI..." className="w-full h-24 bg-gray-50 border-2 border-gray-100 p-6 rounded-[2rem] outline-none focus:border-teal-500 text-sm font-medium" />
+                    <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Misal: 'Sepatu lari di atas batu granit dengan pencahayaan dramatis'..." className="w-full h-24 bg-gray-50 border-2 border-gray-100 p-6 rounded-[2rem] outline-none focus:border-teal-500 text-sm" />
                 </div>
-
                 <div className="flex gap-4">
-                  <div className="flex-1 space-y-2">
-                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Quality</label>
-                     <select value={quality} onChange={e => setQuality(e.target.value as ImageQuality)} className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl outline-none focus:border-teal-500 text-xs font-black uppercase">
-                        <option value={ImageQuality.STANDARD}>Standard (1K)</option>
-                        <option value={ImageQuality.HD_2K}>Pro HD (2K)</option>
-                        <option value={ImageQuality.ULTRA_HD_4K}>Ultra HD (4K)</option>
-                     </select>
-                  </div>
-                  <div className="flex-1 space-y-2">
-                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Ratio</label>
-                     <select value={ratio} onChange={e => setRatio(e.target.value as AspectRatio)} className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl outline-none focus:border-teal-500 text-xs font-black uppercase">
-                        <option value={AspectRatio.SQUARE}>1:1 Square</option>
-                        <option value={AspectRatio.PORTRAIT}>9:16 Portrait</option>
-                        <option value={AspectRatio.LANDSCAPE}>16:9 Landscape</option>
-                     </select>
-                  </div>
+                  <select value={quality} onChange={e => setQuality(e.target.value as ImageQuality)} className="flex-1 bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-xs font-black uppercase">
+                    <option value={ImageQuality.STANDARD}>1K Standard</option>
+                    <option value={ImageQuality.HD_2K}>2K Pro</option>
+                    <option value={ImageQuality.ULTRA_HD_4K}>4K Ultra</option>
+                  </select>
+                  <select value={ratio} onChange={e => setRatio(e.target.value as AspectRatio)} className="flex-1 bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-xs font-black uppercase">
+                    <option value={AspectRatio.SQUARE}>1:1 Square</option>
+                    <option value={AspectRatio.PORTRAIT}>9:16 Portrait</option>
+                    <option value={AspectRatio.LANDSCAPE}>16:9 Landscape</option>
+                  </select>
                 </div>
-
-                <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-8 rounded-[2.5rem] font-black text-white text-xl flex items-center justify-center gap-4 transition-all ${isGenerating ? 'bg-slate-400 scale-[0.98]' : 'bg-teal-500 hover:bg-teal-600 shadow-2xl'}`}>
+                <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-8 rounded-[2.5rem] font-black text-white text-xl flex items-center justify-center gap-4 transition-all ${isGenerating ? 'bg-slate-400' : 'bg-teal-500 hover:bg-teal-600 shadow-2xl'}`}>
                     {isGenerating ? <Loader2 className="animate-spin" /> : <Zap size={24} />}
                     <span>{isGenerating ? 'PROCESSING...' : isBatchMode ? 'GENERATE 6 PRO SHOTS' : 'START GENERATION'}</span>
                 </button>
             </div>
-            {error && <div className="p-5 bg-red-50 text-red-500 rounded-2xl font-bold text-xs text-center border border-red-100">{error}</div>}
-          </div>
+            {error && <div className="p-5 bg-red-50 text-red-500 rounded-2xl font-bold text-xs text-center">{error}</div>}
         </div>
 
         {(results.length > 0 || textContent) && (
           <div className="bg-white p-10 lg:p-16 rounded-[4rem] shadow-2xl border border-gray-100 animate-in fade-in">
-              <div className="flex items-center justify-between mb-12 border-b pb-8">
-                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Hasil Magic Picture</h3>
-                  <button onClick={() => {setResults([]); setTextContent(""); setSources([]);}} className="text-slate-300 hover:text-red-500 transition-colors"><X size={32} /></button>
+              <div className="flex items-center justify-between mb-8 border-b pb-8">
+                  <h3 className="text-2xl font-black text-slate-900">Hasil Magic Picture</h3>
+                  <button onClick={() => {setResults([]); setTextContent("");}} className="text-slate-300 hover:text-red-500"><X size={32} /></button>
               </div>
               {results.length > 0 ? (
                  <div className={`grid gap-8 ${isBatchMode ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
                     {results.map((res, i) => (
-                      <div key={i} className="group relative rounded-[2rem] overflow-hidden border-4 border-gray-50 bg-slate-50 transition-all hover:scale-[1.02]">
+                      <div key={i} className="group relative rounded-[2rem] overflow-hidden border-4 border-gray-50 bg-slate-50">
                          <AngleBadge label={res.angle} />
-                         <img src={res.url} className="w-full aspect-[3/4] object-cover" alt="Generated" />
+                         <img src={res.url} className="w-full aspect-[3/4] object-cover" />
                          <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-4">
-                            <button onClick={() => setSelectedFullImageIdx(i)} className="p-4 bg-white rounded-xl text-slate-900"><Maximize2 size={20} /></button>
+                            <button onClick={() => setSelectedIdx(i)} className="p-4 bg-white rounded-xl"><Maximize2 size={20} /></button>
                             <a href={res.url} download className="p-4 bg-teal-500 rounded-xl text-white"><Download size={20} /></a>
                          </div>
                       </div>
                     ))}
                  </div>
-              ) : (
-                <div className="space-y-8">
-                  <div className="prose max-w-none text-slate-600 font-bold whitespace-pre-wrap leading-relaxed">{textContent}</div>
-                  {sources.length > 0 && (
-                    <div className="pt-8 border-t border-gray-100">
-                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4">Sumber Referensi Grounding:</h4>
-                      <div className="flex flex-wrap gap-3">
-                        {sources.map((chunk, idx) => {
-                          const web = chunk.web;
-                          if (!web) return null;
-                          return (
-                            <a key={idx} href={web.uri} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-gray-200 rounded-xl text-[10px] font-black text-teal-600 hover:bg-teal-50 transition-all uppercase tracking-tight">
-                              <Compass size={14} />
-                              {web.title || "Lihat Sumber"}
-                            </a>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              ) : <div className="prose text-slate-600 font-bold whitespace-pre-wrap">{textContent}</div>}
           </div>
         )}
       </div>
-
-      {selectedFullImageIdx !== null && results[selectedFullImageIdx] && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-2xl" onClick={() => setSelectedFullImageIdx(null)}>
-           <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="absolute left-8 p-6 text-white hover:text-teal-400 transition-colors"><ChevronLeft size={64} /></button>
-           <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="absolute right-8 p-6 text-white hover:text-teal-400 transition-colors"><ChevronRight size={64} /></button>
-           <img 
-            src={results[selectedFullImageIdx].url} 
-            className="max-w-[90vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/10" 
-            alt="Full Preview"
-           />
-        </div>
-      )}
+      <Lightbox images={lightboxImages} index={selectedIdx} onClose={() => setSelectedIdx(null)} onNext={nextImage} onPrev={prevImage} />
     </main>
   );
 };
