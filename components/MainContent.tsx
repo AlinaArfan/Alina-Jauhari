@@ -131,7 +131,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
       const hasKey = await (window as any).aistudio.hasSelectedApiKey();
       if (!hasKey) {
         await (window as any).aistudio.openSelectKey();
-        // Proceed as per guidelines to avoid race condition
       }
     }
 
@@ -174,9 +173,8 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
       }
     } catch (e: any) {
       if (e.message?.includes("Requested entity was not found.")) {
-          // Reset and prompt for key selection
           await (window as any).aistudio.openSelectKey();
-          setError("Requested entity was not found. Mohon pilih API Key berbayar yang valid dan coba lagi.");
+          setError("Requested entity was not found. Mohon pilih API Key berbayar yang valid.");
       } else {
           setError(e.message || "Gagal memproses permintaan.");
       }
@@ -301,8 +299,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   return (
     <main className="flex-1 overflow-y-auto p-6 lg:p-12 bg-gray-50/50 no-scrollbar">
       <div className="max-w-6xl mx-auto space-y-10 pb-40">
-        
-        {/* API Key Status Bar */}
         <div className="bg-slate-900 text-white p-6 rounded-[2.5rem] flex items-center justify-between shadow-xl">
             <div className="flex items-center gap-4">
                 <div className="p-3 rounded-2xl bg-teal-500">
@@ -313,35 +309,24 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                     <p className="text-[9px] text-slate-400 font-bold uppercase">Powered by Gemini GenAI</p>
                 </div>
             </div>
-            <button 
-              onClick={() => (window as any).aistudio.openSelectKey()} 
-              className="px-5 py-2.5 bg-white text-slate-900 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-teal-50 transition-colors"
-            >
-              Select API Key
-            </button>
+            <button onClick={() => (window as any).aistudio.openSelectKey()} className="px-5 py-2.5 bg-white text-slate-900 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-teal-50 transition-colors">Select API Key</button>
         </div>
 
         <div>
           <div className="bg-white rounded-[3.5rem] shadow-2xl border border-gray-100 p-10 lg:p-16 space-y-12">
-            
             <div className="flex items-center justify-between">
                <div className="flex items-center gap-6">
                   <div className="p-4 bg-teal-50 text-teal-600 rounded-2xl"><Wand2 size={28} /></div>
                   <h2 className="text-3xl font-black text-slate-900 tracking-tight">{activeItem}</h2>
                </div>
-               
                {![NavItem.SEO, NavItem.COPYWRITER, NavItem.MAGIC, NavItem.HOME, NavItem.HISTORY, NavItem.LEARNING].includes(activeItem) && (
-                 <button 
-                  onClick={() => setIsBatchMode(!isBatchMode)}
-                  className={`flex items-center gap-3 px-6 py-3 rounded-2xl transition-all border-2 ${isBatchMode ? 'bg-teal-500 border-teal-500 text-white shadow-lg' : 'bg-white border-gray-100 text-slate-400'}`}
-                 >
+                 <button onClick={() => setIsBatchMode(!isBatchMode)} className={`flex items-center gap-3 px-6 py-3 rounded-2xl transition-all border-2 ${isBatchMode ? 'bg-teal-500 border-teal-500 text-white shadow-lg' : 'bg-white border-gray-100 text-slate-400'}`}>
                     <LayoutGrid size={16} />
                     <span className="text-[10px] font-black uppercase tracking-widest">Batch Mode {isBatchMode ? 'ON' : 'OFF'}</span>
                  </button>
                )}
             </div>
 
-            {/* Uploaders */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 {activeItem === NavItem.MAGIC ? (
                     <>
@@ -356,7 +341,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                 )}
             </div>
 
-            {/* Sub Mode Selection */}
             {(activeItem === NavItem.COMMERCIAL || activeItem === NavItem.UGC) && (
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                     {activeItem === NavItem.COMMERCIAL && [
@@ -382,7 +366,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                 </div>
             )}
 
-            {/* Settings Area */}
             <div className="space-y-10">
                 {!isBatchMode && ![NavItem.SEO, NavItem.COPYWRITER, NavItem.LIVE].includes(activeItem) && (
                     <div className="space-y-4">
@@ -418,11 +401,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                 <div className="flex gap-4">
                   <div className="flex-1 space-y-2">
                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Quality</label>
-                     <select 
-                       value={quality} 
-                       onChange={e => setQuality(e.target.value as ImageQuality)}
-                       className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl outline-none focus:border-teal-500 text-xs font-black uppercase"
-                     >
+                     <select value={quality} onChange={e => setQuality(e.target.value as ImageQuality)} className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl outline-none focus:border-teal-500 text-xs font-black uppercase">
                         <option value={ImageQuality.STANDARD}>Standard (1K)</option>
                         <option value={ImageQuality.HD_2K}>Pro HD (2K)</option>
                         <option value={ImageQuality.ULTRA_HD_4K}>Ultra HD (4K)</option>
@@ -430,11 +409,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                   </div>
                   <div className="flex-1 space-y-2">
                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Ratio</label>
-                     <select 
-                       value={ratio} 
-                       onChange={e => setRatio(e.target.value as AspectRatio)}
-                       className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl outline-none focus:border-teal-500 text-xs font-black uppercase"
-                     >
+                     <select value={ratio} onChange={e => setRatio(e.target.value as AspectRatio)} className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl outline-none focus:border-teal-500 text-xs font-black uppercase">
                         <option value={AspectRatio.SQUARE}>1:1 Square</option>
                         <option value={AspectRatio.PORTRAIT}>9:16 Portrait</option>
                         <option value={AspectRatio.LANDSCAPE}>16:9 Landscape</option>
@@ -442,28 +417,21 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                   </div>
                 </div>
 
-                <button 
-                    onClick={handleGenerate} 
-                    disabled={isGenerating} 
-                    className={`w-full py-8 rounded-[2.5rem] font-black text-white text-xl flex items-center justify-center gap-4 transition-all ${isGenerating ? 'bg-slate-400 scale-[0.98]' : 'bg-teal-500 hover:bg-teal-600 shadow-2xl'}`}
-                >
+                <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-8 rounded-[2.5rem] font-black text-white text-xl flex items-center justify-center gap-4 transition-all ${isGenerating ? 'bg-slate-400 scale-[0.98]' : 'bg-teal-500 hover:bg-teal-600 shadow-2xl'}`}>
                     {isGenerating ? <Loader2 className="animate-spin" /> : <Zap size={24} />}
                     <span>{isGenerating ? 'PROCESSING...' : isBatchMode ? 'GENERATE 6 PRO SHOTS' : 'START GENERATION'}</span>
                 </button>
             </div>
-            
             {error && <div className="p-5 bg-red-50 text-red-500 rounded-2xl font-bold text-xs text-center border border-red-100">{error}</div>}
           </div>
         </div>
 
-        {/* Results section displaying images or text with search sources */}
         {(results.length > 0 || textContent) && (
           <div className="bg-white p-10 lg:p-16 rounded-[4rem] shadow-2xl border border-gray-100 animate-in fade-in">
               <div className="flex items-center justify-between mb-12 border-b pb-8">
                   <h3 className="text-2xl font-black text-slate-900 tracking-tight">Hasil Magic Picture</h3>
                   <button onClick={() => {setResults([]); setTextContent(""); setSources([]);}} className="text-slate-300 hover:text-red-500 transition-colors"><X size={32} /></button>
               </div>
-
               {results.length > 0 ? (
                  <div className={`grid gap-8 ${isBatchMode ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
                     {results.map((res, i) => (
@@ -488,13 +456,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                           const web = chunk.web;
                           if (!web) return null;
                           return (
-                            <a 
-                              key={idx} 
-                              href={web.uri} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-gray-200 rounded-xl text-[10px] font-black text-teal-600 hover:bg-teal-50 transition-all uppercase tracking-tight"
-                            >
+                            <a key={idx} href={web.uri} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-gray-200 rounded-xl text-[10px] font-black text-teal-600 hover:bg-teal-50 transition-all uppercase tracking-tight">
                               <Compass size={14} />
                               {web.title || "Lihat Sumber"}
                             </a>
@@ -509,12 +471,12 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         )}
       </div>
 
-      {selectedFullImageIdx !== null && (results[selectedFullImageIdx] || history[selectedFullImageIdx]) && (
+      {selectedFullImageIdx !== null && results[selectedFullImageIdx] && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-2xl" onClick={() => setSelectedFullImageIdx(null)}>
            <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="absolute left-8 p-6 text-white hover:text-teal-400 transition-colors"><ChevronLeft size={64} /></button>
            <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="absolute right-8 p-6 text-white hover:text-teal-400 transition-colors"><ChevronRight size={64} /></button>
            <img 
-            src={activeItem === NavItem.HISTORY ? (history[selectedFullImageIdx]?.url) : (results[selectedFullImageIdx]?.url)} 
+            src={results[selectedFullImageIdx].url} 
             className="max-w-[90vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/10" 
             alt="Full Preview"
            />
