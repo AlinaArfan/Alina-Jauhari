@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality, LiveServerMessage } from "@google/genai";
 import { AspectRatio, ImageQuality } from "../types";
 
 const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
@@ -14,145 +14,73 @@ const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType:
   });
 };
 
-const urlToPart = async (url: string): Promise<{ inlineData: { data: string; mimeType: string } }> => {
-  const response = await fetch(url);
-  const blob = await response.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = (reader.result as string).split(',')[1];
-      resolve({ inlineData: { data: base64String, mimeType: blob.type } });
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-};
-
 export const generateImage = async (
-  files: File[],
+  subjectFiles: File[],
+  referenceFile: File | null,
   systemPrompt: string,
   userPrompt: string,
   aspectRatio: AspectRatio,
   quality: ImageQuality,
   angle: string
 ): Promise<string> => {
-  const imageParts = await Promise.all(files.map(file => fileToPart(file)));
-  // Selalu gunakan Flash model untuk menghindari limitasi API Key Pro
-  const modelName = 'gemini-2.5-flash-image';
-
-  const coreInstruction = `
-    GOAL: Generate/Edit a high-end, commercial-grade photo.
-    CAMERA ANGLE: ${angle}.
-    ${systemPrompt}
-    USER DETAILS: ${userPrompt}.
-    QUALITY: Photorealistic, 8k resolution, professional commercial lighting.
-    RULES: Keep the subject's identity/product details consistent unless specified otherwise.
-  `;
-
-  try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: { parts: [...imageParts, { text: coreInstruction.trim() }] },
-      config: {
-        imageConfig: {
-          aspectRatio: aspectRatio as any
-        }
-      }
-    });
-
-    const candidates = response.candidates;
-    if (candidates && candidates.length > 0) {
-      const parts = candidates[0].content?.parts;
-      const part = parts?.find(part => part.inlineData);
-      if (part?.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
-    }
-    throw new Error("AI tidak mengembalikan gambar.");
-  } catch (error: any) {
-    console.error("Gemini Error:", error);
-    throw error;
-  }
-};
-
-export const generateMagicContent = async (imageUrl: string, type: 'voice' | 'video'): Promise<string> => {
-  const imgPart = await urlToPart(imageUrl);
-  const prompt = type === 'voice' 
-    ? `Analisis produk/gambar ini dan buatkan naskah jualan TikTok yang sangat VIRAL.
-       ATURAN KETAT:
-       1. HANYA TULIS NASKAHNYA SAJA. 
-       2. DILARANG KERAS menulis kalimat pengantar.
-       3. Gunakan bahasa Indonesia gaul, persuasif, dan emosional.
-       4. Maksimal 60 kata.`
-    : "Buatkan instruksi gerakan kamera (Video Motion Prompt) yang estetik untuk gambar ini. HANYA TULIS INSTRUKSINYA SAJA.";
-
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: { parts: [imgPart, { text: prompt }] }
-  });
+  const subjectParts = await Promise.all(subjectFiles.map(file => fileToPart(file)));
+  const referencePart = referenceFile ? await fileToPart(referenceFile) : null;
   
-  return response.text?.trim() || "Gagal membuat konten.";
-};
+  const isPro = quality === ImageQuality.HD_2K || quality === ImageQuality.ULTRA_HD_4K;
+  const modelName = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
 
-export const generateTTS = async (text: string, voiceName: string = 'Kore'): Promise<string> => {
+  // Inisialisasi ulang instansi AI setiap kali dipanggil untuk mendapatkan Key terbaru
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  const config: any = { 
+    imageConfig: { 
+      aspectRatio: aspectRatio as any
+    } 
+  };
+
+  if (isPro) {
+    config.imageConfig.imageSize = quality;
+  }
+
+  const coreInstruction = `TASK: ABSOLUTE FIDELITY PRODUCT RECONSTRUCTION. ${systemPrompt} ${userPrompt} ANGLE: ${angle}. NO TEXT. NO MANNEQUINS.`;
+
+  const parts = [
+    { text: "CORE SUBJECT:" },
+    ...subjectParts,
+    ...(referencePart ? [{ text: "STYLE REFERENCE:" }, referencePart] : []),
+    { text: coreInstruction.trim() }
+  ];
+
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: `Say ONLY the following text in Indonesian as a cheerful TikTok influencer: ${text}` }] }],
-    config: {
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: voiceName as any },
-        },
-      },
-    },
+    model: modelName,
+    contents: { parts },
+    config: config
   });
 
-  const candidates = response.candidates;
-  if (candidates && candidates.length > 0) {
-    const base64Audio = candidates[0].content?.parts?.[0]?.inlineData?.data;
-    if (base64Audio) return base64Audio;
-  }
-  
-  throw new Error("Gagal generate suara.");
+  const part = response.candidates?.[0].content?.parts?.find(p => p.inlineData);
+  if (part?.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+  throw new Error("Gagal menghasilkan gambar.");
 };
 
-export function decodeBase64(base64: string) {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
+export const getSEOTrends = async (productName: string): Promise<{ text: string; sources: any[] }> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: `Cari tren pemasaran dan kata kunci viral terbaru untuk produk: ${productName} di Indonesia.`,
+    config: { tools: [{ googleSearch: {} }] }
+  });
+  return {
+    text: response.text || "",
+    sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || []
+  };
+};
 
-export async function decodeAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
-  const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
-  const channelData = buffer.getChannelData(0);
-  for (let i = 0; i < dataInt16.length; i++) {
-    channelData[i] = dataInt16[i] / 32768.0;
-  }
-  return buffer;
-}
-
-export function pcmToWav(pcmData: Uint8Array, sampleRate: number = 24000): Blob {
-  const buffer = new ArrayBuffer(44 + pcmData.length);
-  const view = new DataView(buffer);
-  view.setUint32(0, 0x52494646, false); // "RIFF"
-  view.setUint32(4, 36 + pcmData.length, true);
-  view.setUint32(8, 0x57415645, false); // "WAVE"
-  view.setUint32(12, 0x666d7420, false); 
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint16(34, 16, true);
-  view.setUint32(36, 0x64617461, false);
-  view.setUint32(40, pcmData.length, true);
-  const pcmBytes = new Uint8Array(buffer, 44);
-  pcmBytes.set(pcmData);
-  return new Blob([buffer], { type: 'audio/wav' });
-}
+export const generateCopywriting = async (file: File, type: 'caption' | 'benefits' | 'hashtags'): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const imgPart = await fileToPart(file);
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: { parts: [imgPart, { text: `Tulis ${type} untuk produk ini.` }] }
+  });
+  return response.text || "Gagal.";
+};

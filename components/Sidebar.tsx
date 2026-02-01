@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { 
-  Home, Wand2, ShoppingBag, Megaphone, Users, UserSquare2, BookOpen, Smartphone, Sparkles
+  Home, Wand2, ShoppingBag, Megaphone, Users, Smartphone, Sparkles, Search, Mic2, BookOpen, PenTool, GraduationCap
 } from 'lucide-react';
 import { NavItem } from '../types';
 
@@ -20,6 +20,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem, setActiveItem, isOpen, on
     { id: NavItem.ADS, label: 'Ads Studio', icon: Megaphone },
     { id: NavItem.HUMAN, label: 'Human Studio', icon: Users },
     { id: NavItem.MAGIC, label: 'Magic Tools', icon: Sparkles },
+    { id: NavItem.COPYWRITER, label: 'Marketing Lab', icon: PenTool },
+    { id: NavItem.SEO, label: 'Market Trends', icon: Search },
+    { id: NavItem.LIVE, label: 'Live Assistant', icon: Mic2 },
+    { id: NavItem.LEARNING, label: 'Edu Center', icon: GraduationCap },
   ];
 
   return (
@@ -38,8 +42,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem, setActiveItem, isOpen, on
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar py-6 px-4 space-y-2">
-        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-4 mb-2 block">Main Menu</label>
+      <div className="flex-1 overflow-y-auto no-scrollbar py-6 px-4 space-y-1">
+        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-4 mb-2 block">Studio Suite</label>
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeItem === item.id;
@@ -49,7 +53,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem, setActiveItem, isOpen, on
               key={item.id}
               onClick={() => setActiveItem(item.id)}
               className={`
-                w-full flex items-center space-x-4 px-5 py-4 rounded-2xl transition-all duration-300 group
+                w-full flex items-center space-x-4 px-5 py-3.5 rounded-2xl transition-all duration-300 group
                 ${isActive 
                   ? 'bg-teal-500/10 text-teal-400 border-l-4 border-teal-500 shadow-xl' 
                   : 'hover:bg-gray-800/50 text-gray-500 hover:text-white border-l-4 border-transparent'}
@@ -61,14 +65,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem, setActiveItem, isOpen, on
           );
         })}
         
-        <div className="pt-8 px-2">
+        <div className="pt-6 px-2">
              <button
                 onClick={onOpenTutorial}
-                className="w-full flex items-center justify-between px-5 py-5 rounded-3xl bg-teal-500 text-white font-black text-xs uppercase tracking-widest shadow-xl shadow-teal-500/20 hover:scale-[1.02] active:scale-95 transition-all"
+                className="w-full flex items-center justify-between px-5 py-4 rounded-3xl bg-teal-500/10 text-teal-500 border border-teal-500/20 font-black text-[10px] uppercase tracking-widest hover:bg-teal-500 hover:text-white transition-all"
              >
                 <div className="flex items-center gap-3">
                     <BookOpen className="w-4 h-4" />
-                    <span>Buka Tutorial</span>
+                    <span>Quick Guide</span>
                 </div>
                 <Sparkles className="w-3 h-3 animate-pulse" />
              </button>
@@ -79,8 +83,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem, setActiveItem, isOpen, on
         <div className="flex items-center space-x-4">
             <div className="w-10 h-10 rounded-2xl bg-teal-600 flex items-center justify-center text-white font-black shadow-lg">A</div>
             <div>
-                <p className="text-xs font-black text-white uppercase tracking-tight">Affiliate Pro v2.0</p>
-                <p className="text-[10px] text-teal-500 uppercase font-black tracking-widest">Active License</p>
+                <p className="text-xs font-black text-white uppercase tracking-tight">Affiliate v2.5</p>
+                <p className="text-[10px] text-teal-500 uppercase font-black tracking-widest">Flash Engine</p>
             </div>
         </div>
       </div>

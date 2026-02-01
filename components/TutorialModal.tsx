@@ -27,8 +27,8 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
       color: "text-green-600",
       content: [
         { subtitle: "Selfie Review", text: "Membuat foto orang asli yang sedang selfie memegang produk Anda. Meningkatkan kepercayaan (Social Proof)." },
-        { subtitle: "POV / In-Hand", text: "Sudut pandang tangan memegang produk (First Person View) dengan latar natural." },
-        { subtitle: "Messy / Unboxing", text: "Foto produk di lingkungan 'berantakan' atau natural agar terlihat seperti foto kiriman pelanggan asli." }
+        { subtitle: "POV Hand", text: "Tampilan dari sudut pandang mata kita sendiri (First Person). HANYA menampilkan tangan yang memegang produk tanpa memperlihatkan wajah." },
+        { subtitle: "Unboxing Exp", text: "Foto produk di lingkungan natural atau sedang dibuka dari kemasan agar terlihat seperti kiriman pelanggan asli." }
       ]
     },
     {
@@ -46,8 +46,6 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
       icon: Wand2,
       color: "text-purple-600",
       content: [
-        { subtitle: "Gabung & Edit", text: "Menggabungkan beberapa gambar atau mengubah elemen tertentu (misal: ganti warna baju)." },
-        { subtitle: "Expand (Outpainting)", text: "Memperluas ukuran gambar jika foto terlalu terpotong (crop)." },
         { subtitle: "Face Swap", text: "Ganti wajah pada foto target dengan wajah sumber yang Anda upload. Cocok untuk personal branding tanpa foto studio sendiri." }
       ]
     },
@@ -57,17 +55,16 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
       color: "text-pink-600",
       content: [
         { subtitle: "AI Model", text: "Membuat karakter model dari nol (pilih ras, umur, gaya rambut)." },
-        { subtitle: "Professional", text: "Membuat foto profil formal untuk LinkedIn atau CV." },
-        { subtitle: "Lifestyle", text: "Membuat foto orang dalam aktivitas sehari-hari yang terlihat candid/alami." }
+        { subtitle: "Professional", text: "Membuat foto profil formal untuk LinkedIn atau CV." }
       ]
     },
     {
-      title: "Fitur Canggih: Video & Suara",
-      icon: Video,
+      title: "Voice Over Lab",
+      icon: Mic,
       color: "text-teal-600",
       content: [
-        { subtitle: "Video Prompt", text: "Setelah gambar jadi, klik tombol 'Video Prompt'. AI akan menulis instruksi kamera. Copy teks tersebut ke tools seperti Runway/Luma untuk membuat gambar bergerak." },
-        { subtitle: "Voice Script (VO)", text: "Klik 'Voice Script'. AI akan membuat naskah jualan TikTok + Audio suara (TTS). Anda bisa mengedit teksnya sebelum didownload!" }
+        { subtitle: "Analysis-Based Script", text: "AI akan memindai foto produk Anda dan membuat naskah jualan yang akurat sesuai barangnya." },
+        { subtitle: "TTS & Download", text: "Ubah naskah menjadi suara AI (Pria/Wanita) dan download hasilnya sebagai file .wav untuk konten video Anda." }
       ]
     }
   ];
@@ -99,8 +96,7 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
             <div className="bg-gradient-to-r from-teal-50 to-blue-50 p-6 rounded-2xl border border-teal-100">
                 <h3 className="font-bold text-teal-800 mb-2">👋 Selamat Datang!</h3>
                 <p className="text-sm text-teal-700 leading-relaxed">
-                    Aplikasi ini dirancang khusus untuk <b>Affiliate Marketer</b> dan <b>Content Creator</b>. 
-                    Anda bisa membuat foto produk, model baju, hingga naskah jualan otomatis hanya dengan upload foto mentah.
+                    Aplikasi ini dirancang khusus untuk <b>Affiliate Marketer</b>. Anda bisa membuat foto produk, model baju, hingga naskah jualan otomatis hanya dengan upload foto mentah.
                 </p>
             </div>
 
@@ -131,8 +127,7 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
                 <div>
                     <h4 className="font-bold text-orange-800 text-sm mb-1">Tips Pro: Batch Mode</h4>
                     <p className="text-xs text-orange-700 leading-relaxed">
-                        Aktifkan tombol <b>"Generate 6 Poses"</b> di bagian bawah Commercial Hub atau Human Studio. 
-                        AI akan langsung membuat 6 variasi sudut pandang (Depan, Samping, Close-up, dll) sekaligus dalam satu kali klik.
+                        Aktifkan tombol <b>"Batch Mode"</b> di bagian bawah. AI akan langsung membuat 6 variasi sudut pandang (Depan, Samping, Close-up, dll) sekaligus dalam satu kali klik.
                     </p>
                 </div>
             </div>

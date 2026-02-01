@@ -18,6 +18,53 @@
           -ms-overflow-style: none;
           scrollbar-width: none;
       }
+
+      /* Print Styles for PDF Export */
+      @media print {
+        /* Sembunyikan elemen UI yang tidak perlu di PDF */
+        nav, aside, button, .no-print, [role="button"] {
+          display: none !important;
+        }
+        
+        /* Reset layout untuk cetak */
+        body, main {
+          background: white !important;
+          color: black !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+        }
+
+        .max-w-6xl {
+          max-width: 100% !important;
+        }
+
+        /* Pastikan kartu terlihat bagus saat dicetak */
+        .bg-white {
+          border: 1px solid #eee !important;
+          box-shadow: none !important;
+          break-inside: avoid;
+        }
+
+        .bg-slate-900 {
+          background-color: #1e293b !important;
+          color: white !important;
+          -webkit-print-color-adjust: exact;
+        }
+
+        h1, h2, h3 {
+          page-break-after: avoid;
+        }
+
+        .grid {
+          display: block !important;
+        }
+
+        .grid > div {
+          margin-bottom: 2rem !important;
+          page-break-inside: avoid;
+        }
+      }
     </style>
   <script type="importmap">
 {

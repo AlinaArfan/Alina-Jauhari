@@ -23,6 +23,9 @@ export enum NavItem {
   UGC = 'UGC Studio',
   ADS = 'Ads Studio',
   HUMAN = 'Human Studio',
-  FACESWAP = 'Face Swap',
   MAGIC = 'Magic Tools',
+  SEO = 'SEO Trends',
+  LIVE = 'Live Assistant',
+  COPYWRITER = 'Marketing Lab',
+  LEARNING = 'Edu Center',
 }
