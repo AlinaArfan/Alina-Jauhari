@@ -81,9 +81,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem, setActiveItem, isOpen, on
       
       <div className="p-6 border-t border-gray-800 bg-[#08111a]">
         <div className="flex items-center space-x-4">
-            <div className="w-10 h-10 rounded-2xl bg-teal-600 flex items-center justify-center text-white font-black shadow-lg">A</div>
+            <div className="w-10 h-10 rounded-2xl bg-teal-600 flex items-center justify-center text-white font-black shadow-lg">MP</div>
             <div>
-                <p className="text-xs font-black text-white uppercase tracking-tight">Affiliate v2.5</p>
+                <p className="text-xs font-black text-white uppercase tracking-tight">Magic Picture v2.5</p>
                 <p className="text-[10px] text-teal-500 uppercase font-black tracking-widest">Flash Engine</p>
             </div>
         </div>

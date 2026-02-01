@@ -51,25 +51,25 @@ export const generateImage = async (
     config.imageConfig.imageSize = quality;
   }
 
-  // MAX ACCURACY PROMPT TEMPLATE
+  // ENHANCED FIDELITY PROMPT
   const coreInstruction = `
-    TASK: HIGH-FIDELITY PRODUCT RECONSTRUCTION.
-    SCENE CONTEXT: ${systemPrompt}.
-    USER REQUEST: ${userPrompt}.
-    CAMERA ANGLE: ${angleDesc}.
+    [OBJECTIVE: ABSOLUTE FIDELITY RECONSTRUCTION]
+    SCENE: ${systemPrompt}.
+    ENVIRONMENT: ${userPrompt}.
+    TECHNICAL ANGLE: ${angleDesc}.
     
-    CRITICAL RULES FOR ACCURACY:
-    1. SUBJECT INTEGRITY: Use the provided source images as the absolute reference for the product's shape, logo, color, and texture. DO NOT alter the product's branding or physical dimensions.
-    2. LIGHTING: Apply professional commercial lighting that matches the "SCENE CONTEXT". Ensure realistic shadows and reflections that ground the product in the environment.
-    3. COMPOSITION: Center the product. If "POV" is mentioned, ensure the hands look natural and the perspective is first-person.
-    4. QUALITY: Photorealistic, 8k resolution, sharp focus on the product, cinematic depth of field.
-    5. NEGATIVE: Avoid distorted text, extra limbs, floating objects, or cartoonish aesthetics.
+    [STRICT ACCURACY RULES]:
+    1. GEOMETRY: Maintain 100% accurate physical dimensions and geometric structure of the product from source images.
+    2. TEXTURE & COLOR: Preserve original colors, fabric patterns, logos, and materials. No hallucination on branding.
+    3. PERSPECTIVE: The chosen technical angle (${angleDesc}) must be applied with realistic foreshortening while keeping the product centered.
+    4. INTEGRATION: Place the product naturally into the environment with correct contact shadows (ambient occlusion) and reflections.
+    5. QUALITY: Cinematic photography, 8k resolution, high dynamic range, sharp product focus.
   `.trim();
 
   const parts = [
-    { text: "SOURCE PRODUCT IMAGES (FOR RECONSTRUCTION):" },
+    { text: "REFERENCE PRODUCT VISUALS:" },
     ...subjectParts,
-    ...(referencePart ? [{ text: "STYLE/ENVIRONMENT REFERENCE:" }, referencePart] : []),
+    ...(referencePart ? [{ text: "STYLE/LIGHTING REFERENCE:" }, referencePart] : []),
     { text: coreInstruction }
   ];
 
@@ -81,7 +81,7 @@ export const generateImage = async (
 
   const part = response.candidates?.[0].content?.parts?.find(p => p.inlineData);
   if (part?.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-  throw new Error("Gagal menghasilkan gambar. Coba kurangi jumlah gambar atau ganti model.");
+  throw new Error("Gagal menghasilkan gambar. Pastikan API Key valid dan coba kurangi jumlah file.");
 };
 
 export const getSEOTrends = async (productName: string): Promise<{ text: string; sources: any[] }> => {
@@ -89,12 +89,7 @@ export const getSEOTrends = async (productName: string): Promise<{ text: string;
   const ai = new GoogleGenAI({ apiKey: apiKey! });
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Analisis tren pasar terkini (2025) untuk produk: ${productName}. 
-    Sertakan:
-    - Top 5 TikTok Hashtags yang sedang viral.
-    - Analisis harga jual terlaris di Marketplace.
-    - Sudut pandang konten video yang paling banyak ditonton (Hook & Storyline).
-    - Berikan data konkret berdasarkan pencarian web.`,
+    contents: `Analisis mendalam tren pasar 2025 untuk: ${productName}. Berikan strategi marketing spesifik, hashtag viral, dan analisis kompetitor di Marketplace.`,
     config: { tools: [{ googleSearch: {} }] }
   });
   return {
@@ -109,7 +104,7 @@ export const generateCopywriting = async (file: File, type: string): Promise<str
   const imgPart = await fileToPart(file);
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: { parts: [imgPart, { text: `Analisis produk ini secara visual, lalu tulis ${type} yang memiliki 'High Conversion Rate' dan emosional.` }] }
+    contents: { parts: [imgPart, { text: `Tulis ${type} profesional dengan teknik psikologi copywriting (AIDA) berdasarkan produk ini.` }] }
   });
   return response.text || "Gagal menghasilkan naskah.";
 };

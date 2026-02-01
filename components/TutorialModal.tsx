@@ -16,9 +16,9 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
       icon: ShoppingBag,
       color: "text-blue-600",
       content: [
-        { subtitle: "Product Shot", text: "Ubah foto produk biasa (di meja/lantai) menjadi foto studio profesional. AI akan mengganti latar belakang sesuai deskripsi Anda." },
-        { subtitle: "AI Fashion", text: "Upload foto pakaian (flat lay atau mannequin), AI akan membuat model manusia realistis yang memakainya." },
-        { subtitle: "Mockup", text: "Tempelkan desain logo atau stiker ke permukaan benda nyata (mug, dinding, kemasan) agar terlihat menyatu." }
+        { subtitle: "Product Shot", text: "Ubah foto produk biasa menjadi foto studio profesional dengan latar belakang mewah." },
+        { subtitle: "AI Fashion", text: "Upload foto pakaian, AI akan membuat model manusia realistis yang memakainya." },
+        { subtitle: "Mockup", text: "Tempelkan desain logo atau stiker ke permukaan benda nyata dengan perspektif 3D." }
       ]
     },
     {
@@ -26,9 +26,9 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
       icon: Smartphone,
       color: "text-green-600",
       content: [
-        { subtitle: "Selfie Review", text: "Membuat foto orang asli yang sedang selfie memegang produk Anda. Meningkatkan kepercayaan (Social Proof)." },
-        { subtitle: "POV Hand", text: "Tampilan dari sudut pandang mata kita sendiri (First Person). HANYA menampilkan tangan yang memegang produk tanpa memperlihatkan wajah." },
-        { subtitle: "Unboxing Exp", text: "Foto produk di lingkungan natural atau sedang dibuka dari kemasan agar terlihat seperti kiriman pelanggan asli." }
+        { subtitle: "Selfie Review", text: "Membuat foto orang asli yang sedang selfie memegang produk Anda untuk social proof." },
+        { subtitle: "POV Hand", text: "Tampilan sudut pandang mata sendiri (tangan saja) untuk kesan unboxing yang personal." },
+        { subtitle: "Unboxing Exp", text: "Foto produk di lingkungan natural seolah-olah kiriman baru sampai di tangan pelanggan." }
       ]
     },
     {
@@ -36,35 +36,9 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
       icon: Megaphone,
       color: "text-orange-600",
       content: [
-        { subtitle: "Web Banner", text: "Membuat banner lebar untuk header website atau toko online (Shopee/Tokopedia)." },
-        { subtitle: "YouTube Thumbnail", text: "Membuat cover video yang kontras dan menarik perhatian (Click-bait style)." },
+        { subtitle: "Web Banner", text: "Membuat banner lebar untuk header Shopee/Tokopedia." },
+        { subtitle: "YouTube Thumbnail", text: "Membuat cover video yang kontras dan menarik perhatian." },
         { subtitle: "Social Feed", text: "Membuat konten Instagram/TikTok feeds yang estetik." }
-      ]
-    },
-    {
-      title: "Magic Tools & Face Swap",
-      icon: Wand2,
-      color: "text-purple-600",
-      content: [
-        { subtitle: "Face Swap", text: "Ganti wajah pada foto target dengan wajah sumber yang Anda upload. Cocok untuk personal branding tanpa foto studio sendiri." }
-      ]
-    },
-    {
-      title: "Human Studio (Model AI)",
-      icon: Users,
-      color: "text-pink-600",
-      content: [
-        { subtitle: "AI Model", text: "Membuat karakter model dari nol (pilih ras, umur, gaya rambut)." },
-        { subtitle: "Professional", text: "Membuat foto profil formal untuk LinkedIn atau CV." }
-      ]
-    },
-    {
-      title: "Voice Over Lab",
-      icon: Mic,
-      color: "text-teal-600",
-      content: [
-        { subtitle: "Analysis-Based Script", text: "AI akan memindai foto produk Anda dan membuat naskah jualan yang akurat sesuai barangnya." },
-        { subtitle: "TTS & Download", text: "Ubah naskah menjadi suara AI (Pria/Wanita) dan download hasilnya sebagai file .wav untuk konten video Anda." }
       ]
     }
   ];
@@ -73,15 +47,14 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
       <div className="bg-white w-full max-w-4xl h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-scale-up border border-gray-200">
         
-        {/* Header */}
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <div className="flex items-center space-x-3">
              <div className="p-2 bg-teal-100 text-teal-600 rounded-lg">
                 <BookOpen className="w-6 h-6" />
              </div>
              <div>
-                <h2 className="text-xl font-bold text-gray-800">Panduan Pengguna</h2>
-                <p className="text-sm text-gray-500">Tutorial lengkap Magic Picture Affiliate Suite</p>
+                <h2 className="text-xl font-bold text-gray-800">Panduan Magic Picture</h2>
+                <p className="text-sm text-gray-500">Tutorial lengkap Magic Picture Studio Suite</p>
              </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500">
@@ -89,20 +62,17 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Content Scrollable */}
         <div className="flex-1 overflow-y-auto p-6 lg:p-8 bg-white space-y-8">
-            
-            {/* Intro */}
             <div className="bg-gradient-to-r from-teal-50 to-blue-50 p-6 rounded-2xl border border-teal-100">
-                <h3 className="font-bold text-teal-800 mb-2">👋 Selamat Datang!</h3>
+                <h3 className="font-bold text-teal-800 mb-2">👋 Selamat Datang di Magic Picture!</h3>
                 <p className="text-sm text-teal-700 leading-relaxed">
-                    Aplikasi ini dirancang khusus untuk <b>Affiliate Marketer</b>. Anda bisa membuat foto produk, model baju, hingga naskah jualan otomatis hanya dengan upload foto mentah.
+                    Aplikasi ini dirancang khusus untuk mempermudah <b>Affiliate Marketer</b> membuat konten berkualitas tinggi dalam hitungan detik.
                 </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {sections.map((section, idx) => (
-                    <div key={idx} className="border border-gray-100 rounded-2xl p-5 hover:shadow-lg transition-shadow bg-gray-50/50">
+                    <div key={idx} className="border border-gray-100 rounded-2xl p-5 bg-gray-50/50">
                         <div className={`flex items-center space-x-3 mb-4 pb-3 border-b border-gray-100 ${section.color}`}>
                             <section.icon className="w-6 h-6" />
                             <h3 className="font-bold text-lg">{section.title}</h3>
@@ -118,25 +88,10 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
                     </div>
                 ))}
             </div>
-
-            {/* Tips Section */}
-            <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100 flex items-start space-x-4">
-                <div className="p-2 bg-white rounded-full shadow-sm text-orange-500">
-                    <RefreshCw className="w-5 h-5" />
-                </div>
-                <div>
-                    <h4 className="font-bold text-orange-800 text-sm mb-1">Tips Pro: Batch Mode</h4>
-                    <p className="text-xs text-orange-700 leading-relaxed">
-                        Aktifkan tombol <b>"Batch Mode"</b> di bagian bawah. AI akan langsung membuat 6 variasi sudut pandang (Depan, Samping, Close-up, dll) sekaligus dalam satu kali klik.
-                    </p>
-                </div>
-            </div>
-
         </div>
 
-        {/* Footer */}
         <div className="p-4 border-t border-gray-100 bg-gray-50 text-center text-xs text-gray-400">
-            Panduan ini dapat diakses kapan saja melalui menu di sidebar kiri.
+            Magic Picture Studio © 2025
         </div>
 
       </div>

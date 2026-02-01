@@ -21,12 +21,10 @@
 
       /* Print Styles for PDF Export */
       @media print {
-        /* Sembunyikan elemen UI yang tidak perlu di PDF */
         nav, aside, button, .no-print, [role="button"] {
           display: none !important;
         }
         
-        /* Reset layout untuk cetak */
         body, main {
           background: white !important;
           color: black !important;
@@ -39,7 +37,6 @@
           max-width: 100% !important;
         }
 
-        /* Pastikan kartu terlihat bagus saat dicetak */
         .bg-white {
           border: 1px solid #eee !important;
           box-shadow: none !important;
