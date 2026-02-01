@@ -29,14 +29,17 @@ export const generateImage = async (
   quality: ImageQuality,
   angleDesc: string
 ): Promise<string> => {
-  // Use process.env.API_KEY exclusively as per guidelines
+  // Access key safely from process.env (shimmed in index.tsx if needed)
   const apiKey = process.env.API_KEY;
-  if (!apiKey) throw new Error("API Key tidak ditemukan. Mohon setel API_KEY di Environment Variables Vercel.");
+  
+  if (!apiKey || apiKey === "undefined") {
+    throw new Error("API_KEY tidak terdeteksi. Silakan pastikan Environment Variable di Vercel sudah benar dan lakukan Re-deploy.");
+  }
 
   const isPro = quality === ImageQuality.HD_2K || quality === ImageQuality.ULTRA_HD_4K;
   const modelName = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
 
-  // Create a new GoogleGenAI instance right before making an API call to ensure it uses the up-to-date key
+  // Initialize strictly with the provided API key
   const ai = new GoogleGenAI({ apiKey });
   
   const config: any = { 
@@ -78,13 +81,12 @@ export const generateImage = async (
       config: config
     });
 
-    // Find the image part in candidates as it may not be the first part
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
     if (part?.inlineData?.data) {
       return `data:image/png;base64,${part.inlineData.data}`;
     }
     
-    throw new Error("Model tidak mengembalikan data gambar. Gunakan prompt lain atau cek status model Gemini.");
+    throw new Error("Model tidak mengembalikan data gambar. Silakan coba prompt lain.");
   } catch (err: any) {
     console.error("Gemini Service Error:", err);
     throw err;
@@ -96,7 +98,7 @@ export const generateImage = async (
  */
 export const getSEOTrends = async (query: string): Promise<{ text: string; sources: any[] }> => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) return { text: "API Key tidak disetel.", sources: [] };
+  if (!apiKey || apiKey === "undefined") return { text: "API Key tidak disetel di Vercel.", sources: [] };
   
   const ai = new GoogleGenAI({ apiKey });
   try {
@@ -105,14 +107,13 @@ export const getSEOTrends = async (query: string): Promise<{ text: string; sourc
       contents: `Analisis mendalam tren e-commerce 2025: ${query}. Berikan insight produk viral, keyword pencarian tertinggi, dan strategi affiliate marketing.`,
       config: { tools: [{ googleSearch: {} }] }
     });
-    // Use .text property to get generated string directly
     return {
       text: response.text || "Tidak ada data tren ditemukan.",
       sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || []
     };
   } catch (err) {
     console.error("SEO Error:", err);
-    return { text: "Gagal memuat tren SEO. Cek API Key di Vercel.", sources: [] };
+    return { text: "Gagal memuat tren SEO. Cek konfigurasi API Key.", sources: [] };
   }
 };
 
@@ -121,7 +122,7 @@ export const getSEOTrends = async (query: string): Promise<{ text: string; sourc
  */
 export const generateCopywriting = async (file: File, type: string): Promise<string> => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) return "API Key tidak ditemukan.";
+  if (!apiKey || apiKey === "undefined") return "API Key tidak ditemukan.";
 
   const ai = new GoogleGenAI({ apiKey });
   const imgPart = await fileToPart(file);
@@ -130,7 +131,6 @@ export const generateCopywriting = async (file: File, type: string): Promise<str
       model: "gemini-3-flash-preview",
       contents: { parts: [imgPart, { text: `Tulis ${type} yang sangat persuasif untuk produk ini menggunakan formula AIDA. Gunakan bahasa gaul e-commerce Indonesia.` }] }
     });
-    // Use .text property to get generated string directly
     return response.text || "Gagal menghasilkan teks.";
   } catch (err) {
     console.error("Copywriting Error:", err);
