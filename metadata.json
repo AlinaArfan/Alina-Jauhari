@@ -2,6 +2,7 @@
   "name": "Magic Picture - Affiliate Product Generator",
   "description": "A professional AI-powered tool to generate and combine product images for affiliate marketing using Google Gemini.",
   "requestFramePermissions": [
-    "microphone"
+    "microphone",
+    "camera"
   ]
 }

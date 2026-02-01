@@ -15,16 +15,10 @@ const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType:
 };
 
 const getEffectiveApiKey = (): string | null => {
-  // 1. Cek Manual Input (LocalStorage) - Paling Prioritas jika env gagal
   const savedKey = localStorage.getItem('GEMINI_API_KEY');
   if (savedKey) return savedKey;
-
-  // 2. Cek Vercel/Vite Env
   // @ts-ignore
-  const envKey = process.env.API_KEY || import.meta.env.VITE_API_KEY;
-  if (envKey) return envKey;
-
-  return null;
+  return process.env.API_KEY || import.meta.env.VITE_API_KEY || null;
 };
 
 export const generateImage = async (
@@ -34,10 +28,10 @@ export const generateImage = async (
   userPrompt: string,
   aspectRatio: AspectRatio,
   quality: ImageQuality,
-  angle: string
+  angleDesc: string
 ): Promise<string> => {
   const apiKey = getEffectiveApiKey();
-  if (!apiKey) throw new Error("API Key tidak ditemukan. Sila masukkan kunci di Dashboard.");
+  if (!apiKey) throw new Error("API Key tidak ditemukan.");
 
   const subjectParts = await Promise.all(subjectFiles.map(file => fileToPart(file)));
   const referencePart = referenceFile ? await fileToPart(referenceFile) : null;
@@ -57,31 +51,34 @@ export const generateImage = async (
     config.imageConfig.imageSize = quality;
   }
 
-  const coreInstruction = `TASK: ABSOLUTE FIDELITY PRODUCT RECONSTRUCTION. ${systemPrompt} ${userPrompt} ANGLE: ${angle}. NO TEXT. NO MANNEQUINS.`;
+  // Enhanced Instruction for High Fidelity
+  const coreInstruction = `
+    TASK: Professional Product Reconstruction.
+    ROLE: Commercial Photographer.
+    SUBJECT: Maintain 100% geometric fidelity of the product in the provided photos.
+    ENVIRONMENT: ${systemPrompt}.
+    USER_DESC: ${userPrompt}.
+    CAMERA_ANGLE: ${angleDesc}.
+    STYLE: Photorealistic, 8k, highly detailed textures, soft commercial lighting.
+    RESTRICTIONS: No text, no distorted shapes, no artifacts, no mannequins unless specified.
+  `.trim();
 
   const parts = [
-    { text: "CORE SUBJECT:" },
+    { text: "CORE PRODUCT REFERENCE (CRITICAL):" },
     ...subjectParts,
-    ...(referencePart ? [{ text: "STYLE REFERENCE:" }, referencePart] : []),
-    { text: coreInstruction.trim() }
+    ...(referencePart ? [{ text: "ENVIRONMENT/STYLE REFERENCE (USE THIS BACKGROUND):" }, referencePart] : []),
+    { text: coreInstruction }
   ];
 
-  try {
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: { parts },
-      config: config
-    });
+  const response = await ai.models.generateContent({
+    model: modelName,
+    contents: { parts },
+    config: config
+  });
 
-    const part = response.candidates?.[0].content?.parts?.find(p => p.inlineData);
-    if (part?.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-    throw new Error("Gagal menghasilkan gambar.");
-  } catch (error: any) {
-    if (error.message?.includes("entity was not found")) {
-      throw new Error("MODEL_NOT_FOUND_PAID_REQUIRED");
-    }
-    throw error;
-  }
+  const part = response.candidates?.[0].content?.parts?.find(p => p.inlineData);
+  if (part?.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+  throw new Error("Gagal menghasilkan gambar.");
 };
 
 export const getSEOTrends = async (productName: string): Promise<{ text: string; sources: any[] }> => {
@@ -89,7 +86,7 @@ export const getSEOTrends = async (productName: string): Promise<{ text: string;
   const ai = new GoogleGenAI({ apiKey: apiKey! });
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Cari tren pemasaran dan kata kunci viral terbaru untuk produk: ${productName} di Indonesia.`,
+    contents: `Analisis tren pasar untuk produk: ${productName}. Berikan data: 1. Kata kunci viral TikTok. 2. Estimasi harga kompetitor. 3. Target audiens. 4. Strategi konten video.`,
     config: { tools: [{ googleSearch: {} }] }
   });
   return {
@@ -98,13 +95,13 @@ export const getSEOTrends = async (productName: string): Promise<{ text: string;
   };
 };
 
-export const generateCopywriting = async (file: File, type: 'caption' | 'benefits' | 'hashtags'): Promise<string> => {
+export const generateCopywriting = async (file: File, type: string): Promise<string> => {
   const apiKey = getEffectiveApiKey();
   const ai = new GoogleGenAI({ apiKey: apiKey! });
   const imgPart = await fileToPart(file);
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: { parts: [imgPart, { text: `Tulis ${type} untuk produk ini.` }] }
+    contents: { parts: [imgPart, { text: `Tulis ${type} yang sangat menjual untuk produk ini.` }] }
   });
   return response.text || "Gagal.";
 };
