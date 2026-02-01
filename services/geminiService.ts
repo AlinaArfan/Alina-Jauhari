@@ -16,7 +16,6 @@ const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType:
 
 /**
  * Generates an image using Gemini's image models.
- * Uses gemini-3-pro-image-preview for high quality (2K/4K) and gemini-2.5-flash-image otherwise.
  */
 export const generateImage = async (
   subjectFiles: File[],
@@ -30,8 +29,8 @@ export const generateImage = async (
   const isPro = quality === ImageQuality.HD_2K || quality === ImageQuality.ULTRA_HD_4K;
   const modelName = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
 
-  // Always use process.env.API_KEY directly and initialize right before usage
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+  // Initialize right before call to get current key
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   
   const config: any = { 
     imageConfig: { 
@@ -46,65 +45,71 @@ export const generateImage = async (
   const subjectParts = await Promise.all(subjectFiles.map(file => fileToPart(file)));
   const referencePart = referenceFile ? await fileToPart(referenceFile) : null;
   
-  // ENHANCED FIDELITY PROMPT
   const coreInstruction = `
-    [OBJECTIVE: ABSOLUTE FIDELITY RECONSTRUCTION]
-    SCENE: ${systemPrompt}.
+    [TASK: HIGHEST QUALITY PRODUCT RENDERING]
+    STYLE: ${systemPrompt}.
     ENVIRONMENT: ${userPrompt}.
-    TECHNICAL ANGLE: ${angleDesc}.
+    SHOT: ${angleDesc}.
     
-    [STRICT ACCURACY RULES]:
-    1. GEOMETRY: Maintain 100% accurate physical dimensions and geometric structure of the product from source images.
-    2. TEXTURE & COLOR: Preserve original colors, fabric patterns, logos, and materials. No hallucination on branding.
-    3. PERSPECTIVE: The chosen technical angle (${angleDesc}) must be applied with realistic foreshortening while keeping the product centered.
-    4. INTEGRATION: Place the product naturally into the environment with correct contact shadows (ambient occlusion) and reflections.
-    5. QUALITY: Cinematic photography, 8k resolution, high dynamic range, sharp product focus.
+    [GUIDELINES]:
+    - Keep product shape and branding 100% authentic.
+    - Professional lighting and commercial focus.
+    - Cinematic background integration.
   `.trim();
 
   const parts = [
-    { text: "REFERENCE PRODUCT VISUALS:" },
+    { text: "SOURCE PRODUCT IMAGES:" },
     ...subjectParts,
-    ...(referencePart ? [{ text: "STYLE/LIGHTING REFERENCE:" }, referencePart] : []),
+    ...(referencePart ? [{ text: "STYLE REFERENCE:" }, referencePart] : []),
     { text: coreInstruction }
   ];
 
-  const response = await ai.models.generateContent({
-    model: modelName,
-    contents: { parts },
-    config: config
-  });
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: { parts },
+      config: config
+    });
 
-  // Extract the image part correctly from the response candidates
-  const part = response.candidates?.[0].content?.parts?.find(p => p.inlineData);
-  if (part?.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-  throw new Error("Gagal menghasilkan gambar. Pastikan API Key valid dan coba kurangi jumlah file.");
+    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (part?.inlineData?.data) {
+      return `data:image/png;base64,${part.inlineData.data}`;
+    }
+    
+    throw new Error("Model tidak mengembalikan data gambar. Silakan ganti prompt atau API Key.");
+  } catch (err: any) {
+    console.error("API Error:", err);
+    throw err;
+  }
 };
 
-/**
- * Analyzes SEO trends using Google Search grounding.
- */
-export const getSEOTrends = async (productName: string): Promise<{ text: string; sources: any[] }> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Analisis mendalam tren pasar 2025 untuk: ${productName}. Berikan strategi marketing spesifik, hashtag viral, dan analisis kompetitor di Marketplace.`,
-    config: { tools: [{ googleSearch: {} }] }
-  });
-  return {
-    text: response.text || "",
-    sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || []
-  };
+export const getSEOTrends = async (query: string): Promise<{ text: string; sources: any[] }> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Analisis mendalam tren 2025: ${query}. Berikan insight produk viral, keyword pencarian tertinggi, dan strategi affiliate marketing.`,
+      config: { tools: [{ googleSearch: {} }] }
+    });
+    return {
+      text: response.text || "Tidak ada data tren ditemukan.",
+      sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || []
+    };
+  } catch (err) {
+    return { text: "Gagal memuat tren SEO. Cek API Key Anda.", sources: [] };
+  }
 };
 
-/**
- * Generates profesional copywriting based on image input.
- */
 export const generateCopywriting = async (file: File, type: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   const imgPart = await fileToPart(file);
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: { parts: [imgPart, { text: `Tulis ${type} profesional dengan teknik psikologi copywriting (AIDA) berdasarkan produk ini.` }] }
-  });
-  return response.text || "Gagal menghasilkan naskah.";
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: { parts: [imgPart, { text: `Tulis ${type} yang sangat persuasif untuk produk ini menggunakan formula AIDA.` }] }
+    });
+    return response.text || "Gagal menghasilkan teks.";
+  } catch (err) {
+    return "Error menghasilkan copywriting.";
+  }
 };

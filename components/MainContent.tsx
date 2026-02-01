@@ -113,11 +113,10 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     }
   }, [history]);
 
+  // Reset Sub-Mode based on Active Studio
   useEffect(() => {
     setResults([]);
     setTextContent("");
-    setImages([]);
-    setBgRef([]);
     setPrompt("");
     setError(null);
     setIsBatchMode(false);
@@ -128,15 +127,17 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   }, [activeItem]);
 
   const handleGenerate = async () => {
+    // 1. Validasi Input
     if (images.length === 0 && ![NavItem.SEO, NavItem.COPYWRITER].includes(activeItem)) {
         setError("Mohon unggah foto produk terlebih dahulu.");
         return;
     }
 
-    // API Key Logic: Trigger check but proceed immediately as per rules
+    // 2. Pengecekan API Key (Memicu dialog jika belum ada)
     const hasKey = await (window as any).aistudio.hasSelectedApiKey();
     if (!hasKey) {
       await (window as any).aistudio.openSelectKey();
+      // Langsung lanjut sesuai instruksi "assume success"
     }
 
     setIsGenerating(true); 
@@ -144,7 +145,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     
     try {
       if (activeItem === NavItem.SEO) {
-        const res = await getSEOTrends(prompt);
+        const res = await getSEOTrends(prompt || "Tren affiliate marketing 2025");
         setTextContent(res.text);
         setSources(res.sources);
       } else if (activeItem === NavItem.COPYWRITER) {
@@ -165,10 +166,11 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
           const url = await generateImage(images.map(i => i.file), bgRef[0]?.file || null, baseSysPrompt, userPrompt, ratio, quality, activeAngle);
           finalResults = [{ url, angle: activeAngle }];
         }
+        
         setResults(finalResults);
         const newHistory = finalResults.map(r => ({ 
           ...r, 
-          id: Math.random().toString(), 
+          id: Math.random().toString(36).substr(2, 9), 
           timestamp: Date.now(), 
           mode: subMode, 
           category: activeItem 
@@ -176,12 +178,12 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         setHistory(prev => [...newHistory, ...prev]);
       }
     } catch (e: any) {
-      console.error(e);
+      console.error("Generation Error:", e);
       if (e.message?.includes("API_KEY") || e.message?.includes("not found")) {
         await (window as any).aistudio.openSelectKey();
-        setError("API Key Error. Silakan pilih API Key ulang dari project berbayar.");
+        setError("Sesi API Key berakhir atau tidak ditemukan. Silakan pilih ulang API Key.");
       } else {
-        setError(e.message || "Gagal memproses gambar. Pastikan API Key valid.");
+        setError(e.message || "Gagal memproses permintaan. Pastikan koneksi internet stabil.");
       }
     } finally {
       setIsGenerating(false);
@@ -233,17 +235,21 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
       <main className="flex-1 overflow-y-auto p-6 lg:p-12 bg-gray-50/50 no-scrollbar">
          <div className="max-w-6xl mx-auto space-y-10">
             <h1 className="text-4xl font-black text-slate-900">Riwayat Galeri</h1>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                {history.map((item, i) => (
-                    <div key={item.id} className="group relative rounded-[2rem] overflow-hidden shadow-lg bg-white border border-gray-100">
-                        <img src={item.url} className="w-full aspect-square object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                            <button onClick={() => setSelectedIdx(i)} className="p-3 bg-white rounded-xl"><Maximize2 size={18} /></button>
-                            <a href={item.url} download className="p-3 bg-teal-500 text-white rounded-xl"><Download size={18} /></a>
+            {history.length === 0 ? (
+                <div className="bg-white p-20 rounded-[3rem] text-center border-2 border-dashed border-gray-100 text-slate-400 font-bold uppercase tracking-widest text-xs">Belum ada riwayat konten</div>
+            ) : (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    {history.map((item, i) => (
+                        <div key={item.id} className="group relative rounded-[2rem] overflow-hidden shadow-lg bg-white border border-gray-100">
+                            <img src={item.url} className="w-full aspect-square object-cover" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                                <button onClick={() => setSelectedIdx(i)} className="p-3 bg-white rounded-xl text-slate-900"><Maximize2 size={18} /></button>
+                                <a href={item.url} download className="p-3 bg-teal-500 text-white rounded-xl"><Download size={18} /></a>
+                            </div>
                         </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
          </div>
          <Lightbox images={lightboxImages} index={selectedIdx} onClose={() => setSelectedIdx(null)} onNext={() => setSelectedIdx(prev => (prev! + 1) % lightboxImages.length)} onPrev={() => setSelectedIdx(prev => (prev! - 1 + lightboxImages.length) % lightboxImages.length)} />
       </main>
@@ -290,7 +296,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                         { id: 'ai-fashion', label: 'AI Fashion', icon: Shirt, desc: 'Model manusia memakai produk' },
                         { id: 'mockup', label: 'Mockup', icon: Layers, desc: 'Integrasi desain logo/stiker' }
                     ].map(b => (
-                        <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500 shadow-md' : 'bg-white border-gray-100 hover:border-teal-200'}`}>
+                        <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500 shadow-md scale-[1.02]' : 'bg-white border-gray-100 hover:border-teal-200'}`}>
                             <b.icon className={`mb-3 ${subMode === b.id ? 'text-teal-600' : 'text-slate-400'}`} size={20} />
                             <div className="font-black text-[10px] uppercase tracking-widest mb-1">{b.label}</div>
                             <div className="text-[10px] text-slate-400 font-medium">{b.desc}</div>
@@ -301,7 +307,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                         { id: 'pov-hand', label: 'POV Hand', icon: Hand, desc: 'Tangan memegang produk' },
                         { id: 'unboxing-exp', label: 'Unboxing', icon: PackageOpen, desc: 'Kesan kiriman baru sampai' }
                     ].map(b => (
-                        <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500 shadow-md' : 'bg-white border-gray-100 hover:border-teal-200'}`}>
+                        <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500 shadow-md scale-[1.02]' : 'bg-white border-gray-100 hover:border-teal-200'}`}>
                             <b.icon className={`mb-3 ${subMode === b.id ? 'text-teal-600' : 'text-slate-400'}`} size={20} />
                             <div className="font-black text-[10px] uppercase tracking-widest mb-1">{b.label}</div>
                             <div className="text-[10px] text-slate-400 font-medium">{b.desc}</div>
@@ -312,7 +318,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                         { id: 'youtube-thumbnail', label: 'YouTube Thumbnail', icon: Youtube, desc: 'Cover video kontras tinggi' },
                         { id: 'social-feed', label: 'Social Feed', icon: Instagram, desc: 'Konten feed IG/TikTok estetik' }
                     ].map(b => (
-                        <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500 shadow-md' : 'bg-white border-gray-100 hover:border-teal-200'}`}>
+                        <button key={b.id} onClick={() => setSubMode(b.id)} className={`p-6 rounded-[2rem] border-2 text-left transition-all ${subMode === b.id ? 'bg-teal-50 border-teal-500 shadow-md scale-[1.02]' : 'bg-white border-gray-100 hover:border-teal-200'}`}>
                             <b.icon className={`mb-3 ${subMode === b.id ? 'text-teal-600' : 'text-slate-400'}`} size={20} />
                             <div className="font-black text-[10px] uppercase tracking-widest mb-1">{b.label}</div>
                             <div className="text-[10px] text-slate-400 font-medium">{b.desc}</div>
@@ -321,7 +327,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                 </div>
             )}
 
-            {/* LIGHTING & ENVIRONMENT SELECTION */}
+            {/* LIGHTING & ENVIRONMENT */}
             {![NavItem.SEO, NavItem.COPYWRITER].includes(activeItem) && (
               <div className="space-y-4">
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2 flex items-center gap-2">
@@ -337,7 +343,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
               </div>
             )}
 
-            {/* SHOT ANGLES SELECTION */}
+            {/* PRO SHOT ANGLES */}
             {!isBatchMode && ![NavItem.SEO, NavItem.COPYWRITER].includes(activeItem) && (
                 <div className="space-y-4">
                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2 flex items-center gap-2">
@@ -345,7 +351,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                     </label>
                     <div className="flex flex-wrap gap-2">
                         {PRO_ANGLES.map(a => (
-                            <button key={a.code} onClick={() => setActiveAngle(a.code)} className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase border-2 transition-all ${activeAngle === a.code ? 'bg-teal-500 border-teal-500 text-white shadow-md' : 'bg-white border-gray-100 text-slate-400'}`}>
+                            <button key={a.code} onClick={() => setActiveAngle(a.code)} className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase border-2 transition-all ${activeAngle === a.code ? 'bg-teal-500 border-teal-500 text-white shadow-md' : 'bg-white border-gray-100 text-slate-400 hover:border-teal-400'}`}>
                                 <span className="font-black block text-[11px]">{a.code}</span>
                                 <span className="text-[8px] opacity-70">{a.name}</span>
                             </button>
@@ -376,22 +382,28 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                     <option value={AspectRatio.LANDSCAPE}>16:9 Landscape</option>
                   </select>
                 </div>
+                
+                {/* TOMBOL UTAMA START GENERATION */}
                 <button 
                   onClick={handleGenerate} 
                   disabled={isGenerating} 
-                  className={`w-full py-8 rounded-[2.5rem] font-black text-white text-xl flex items-center justify-center gap-4 transition-all ${isGenerating ? 'bg-slate-400' : 'bg-teal-500 hover:bg-teal-600 shadow-2xl hover:scale-[1.01]'}`}
+                  className={`w-full py-8 rounded-[2.5rem] font-black text-white text-xl flex items-center justify-center gap-4 transition-all active:scale-95 ${isGenerating ? 'bg-slate-400 cursor-not-allowed' : 'bg-teal-500 hover:bg-teal-600 shadow-2xl hover:scale-[1.01]'}`}
                 >
                     {isGenerating ? <Loader2 className="animate-spin" /> : <Zap size={24} />}
                     <span>{isGenerating ? 'PROCESSING...' : isBatchMode ? 'GENERATE 6 PRO SHOTS' : 'START GENERATION'}</span>
                 </button>
             </div>
-            {error && <div className="p-5 bg-red-50 text-red-500 rounded-2xl font-bold text-xs text-center border border-red-100 flex items-center justify-center gap-2">
-                <AlertTriangle size={16} /> {error}
-            </div>}
+            
+            {error && (
+                <div className="p-6 bg-red-50 border-2 border-red-100 text-red-500 rounded-[2rem] flex items-center gap-4 animate-in slide-in-from-bottom-2">
+                    <AlertTriangle className="shrink-0" />
+                    <div className="text-xs font-bold leading-relaxed">{error}</div>
+                </div>
+            )}
         </div>
 
         {(results.length > 0 || textContent) && (
-          <div className="bg-white p-10 lg:p-16 rounded-[4rem] shadow-2xl border border-gray-100 animate-in fade-in">
+          <div className="bg-white p-10 lg:p-16 rounded-[4rem] shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-500">
               <div className="flex items-center justify-between mb-8 border-b pb-8">
                   <h3 className="text-2xl font-black text-slate-900">Hasil Magic Picture</h3>
                   <button onClick={() => {setResults([]); setTextContent("");}} className="text-slate-300 hover:text-red-500 transition-colors"><X size={32} /></button>
@@ -399,7 +411,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
               {results.length > 0 ? (
                  <div className={`grid gap-8 ${isBatchMode ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
                     {results.map((res, i) => (
-                      <div key={i} className="group relative rounded-[2rem] overflow-hidden border-4 border-gray-50 bg-slate-50 transition-all hover:border-teal-500">
+                      <div key={i} className="group relative rounded-[2rem] overflow-hidden border-4 border-gray-50 bg-slate-50 transition-all hover:border-teal-500 shadow-sm hover:shadow-xl">
                          <AngleBadge label={res.angle} />
                          <img src={res.url} className="w-full aspect-[3/4] object-cover" alt="Generated" />
                          <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-4">
@@ -409,7 +421,13 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                       </div>
                     ))}
                  </div>
-              ) : <div className="prose text-slate-600 font-bold whitespace-pre-wrap leading-relaxed">{textContent}</div>}
+              ) : (
+                <div className="prose max-w-none">
+                    <div className="text-slate-600 font-bold whitespace-pre-wrap leading-relaxed text-sm bg-gray-50 p-8 rounded-[2rem] border border-gray-100">
+                        {textContent}
+                    </div>
+                </div>
+              )}
           </div>
         )}
       </div>
