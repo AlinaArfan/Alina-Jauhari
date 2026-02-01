@@ -29,8 +29,11 @@ export const generateImage = async (
   const isPro = quality === ImageQuality.HD_2K || quality === ImageQuality.ULTRA_HD_4K;
   const modelName = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
 
-  // Inisialisasi ulang instansi AI setiap kali dipanggil untuk mendapatkan Key terbaru
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Selalu buat instance baru sebelum pemanggilan untuk memastikan API KEY terbaru digunakan
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) throw new Error("API Key tidak ditemukan. Silakan hubungkan kembali.");
+
+  const ai = new GoogleGenAI({ apiKey });
   
   const config: any = { 
     imageConfig: { 
@@ -51,19 +54,27 @@ export const generateImage = async (
     { text: coreInstruction.trim() }
   ];
 
-  const response = await ai.models.generateContent({
-    model: modelName,
-    contents: { parts },
-    config: config
-  });
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: { parts },
+      config: config
+    });
 
-  const part = response.candidates?.[0].content?.parts?.find(p => p.inlineData);
-  if (part?.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-  throw new Error("Gagal menghasilkan gambar.");
+    const part = response.candidates?.[0].content?.parts?.find(p => p.inlineData);
+    if (part?.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+    throw new Error("Gagal menghasilkan gambar.");
+  } catch (error: any) {
+    if (error.message?.includes("entity was not found")) {
+      throw new Error("MODEL_NOT_FOUND_PAID_REQUIRED");
+    }
+    throw error;
+  }
 };
 
 export const getSEOTrends = async (productName: string): Promise<{ text: string; sources: any[] }> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  const ai = new GoogleGenAI({ apiKey: apiKey! });
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `Cari tren pemasaran dan kata kunci viral terbaru untuk produk: ${productName} di Indonesia.`,
@@ -76,7 +87,8 @@ export const getSEOTrends = async (productName: string): Promise<{ text: string;
 };
 
 export const generateCopywriting = async (file: File, type: 'caption' | 'benefits' | 'hashtags'): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  const ai = new GoogleGenAI({ apiKey: apiKey! });
   const imgPart = await fileToPart(file);
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",

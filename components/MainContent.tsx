@@ -12,7 +12,7 @@ import {
   Smartphone, UserSquare2, Sun, Star, Megaphone, Video, User, Shirt, Layers, 
   ZoomIn, View, UserCircle, Wand2, Search, Info, PenTool, PackageOpen, 
   X, UserRound, ArrowUpCircle, Maximize2, ShieldCheck, Key, Settings2, RotateCw, CornerDownRight, ArrowDownRight, ArrowUpLeft, Hand, Sofa, Utensils, Monitor, Bath, Car, Thermometer, Mountain,
-  Palette, Layout, GraduationCap, AlertTriangle, ExternalLink, Lock
+  Palette, Layout, GraduationCap, AlertTriangle, ExternalLink, Lock, CheckCircle, Database
 } from 'lucide-react';
 
 declare global {
@@ -45,8 +45,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   const [selectedSubMode, setSelectedSubMode] = useState("");
   const [selectedStyle, setSelectedStyle] = useState("neutral-home");
   const [selectedAngle, setSelectedAngle] = useState("d3q");
-  const [selectedGender, setSelectedGender] = useState("Wanita");
-  const [selectedRace, setSelectedRace] = useState("Indonesia");
   const [ratio, setRatio] = useState<AspectRatio>(AspectRatio.PORTRAIT);
   const [quality, setQuality] = useState<ImageQuality>(ImageQuality.STANDARD);
   
@@ -54,20 +52,34 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   const [results, setResults] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedFullImage, setSelectedFullImage] = useState<string | null>(null);
-  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
+  const [keySource, setKeySource] = useState<'vercel' | 'manual' | null>(null);
   
   const [seoProduct, setSeoProduct] = useState("");
   const [seoResult, setSeoResult] = useState<{ text: string; sources: any[] } | null>(null);
 
   useEffect(() => {
     checkApiKey();
+    const interval = setInterval(checkApiKey, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const checkApiKey = async () => {
+    // 1. Cek Vercel Env (Tertinggi priority untuk otomasi)
+    if (process.env.API_KEY && process.env.API_KEY.length > 5) {
+      setKeySource('vercel');
+      return;
+    }
+
+    // 2. Cek Manual BYOK (Gunakan tool aistudio)
     if (window.aistudio) {
       const status = await window.aistudio.hasSelectedApiKey();
-      setHasApiKey(status);
+      if (status) {
+        setKeySource('manual');
+        return;
+      }
     }
+    
+    setKeySource(null);
   };
 
   useEffect(() => {
@@ -87,7 +99,9 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     try {
       if (window.aistudio) {
         await window.aistudio.openSelectKey();
-        setHasApiKey(true);
+        setKeySource('manual');
+      } else {
+        alert("Variabel Vercel API_KEY tidak terdeteksi. Silakan masukkan secara manual jika tersedia.");
       }
     } catch (e) {
       console.error("Gagal membuka dialog kunci", e);
@@ -95,11 +109,8 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   };
 
   const handleGenerate = async () => {
-    const keySelected = await window.aistudio?.hasSelectedApiKey();
-    if (!keySelected) {
-      setHasApiKey(false);
-      setError("Akses terkunci: Silakan hubungkan API Key Anda terlebih dahulu.");
-      await handleSetApiKey();
+    if (!keySource) {
+      setError("API Key tidak ditemukan. Pastikan Anda sudah memasukkan API_KEY di Environment Variables Vercel dan melakukan Redeploy.");
       return;
     }
 
@@ -110,45 +121,23 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
 
     setIsGenerating(true); setError(null); setResults([]);
     try {
-      const styleDesc = styles.find(s => s.id === selectedStyle)?.desc || "";
       const subjectFiles = images.map(i => i.file);
       const referenceFile = bgReference.length > 0 ? bgReference[0].file : null;
-
-      const angleObj = angles.find(a => a.id === selectedAngle);
-      const angleDesc = angleObj ? `${angleObj.label}: ${angleObj.desc}` : "Eye Level";
-      const finalSystemP = `ENVIRONMENT: ${styleDesc}. ANGLE: ${angleDesc}. MANDATORY: ZERO TEXT. No watermarks. `;
+      const angleDesc = angles.find(a => a.id === selectedAngle)?.desc || "Eye Level";
+      const finalSystemP = `ENVIRONMENT: ${styles.find(s => s.id === selectedStyle)?.desc || ""}. ANGLE: ${angleDesc}. MANDATORY: ZERO TEXT. `;
       
       const url = await generateImage(subjectFiles, referenceFile, finalSystemP, prompt, ratio, quality, angleDesc);
       setResults([url]);
     } catch (e: any) {
       const msg = e.message || "";
-      // Penanganan khusus jika model Pro tidak ditemukan (biasanya karena belum ada billing)
-      if (msg.includes("Requested entity was not found") || msg.includes("404")) {
-        setError("Error: Model HD memerlukan API Key dari project berbayar (Paid Project). Silakan gunakan kualitas '1K Standard' atau aktifkan billing di Google Cloud.");
-      } else if (msg.includes("API key")) {
-        setHasApiKey(false);
-        setError("API Key tidak valid. Silakan set ulang.");
+      if (msg === "MODEL_NOT_FOUND_PAID_REQUIRED") {
+        setError("Error: Model HD (2K/4K) memerlukan API Key berbayar. Turunkan kualitas ke 1K Standard.");
+      } else if (msg.includes("403") || msg.includes("permission denied")) {
+        setError("Error 403: API Key Anda tidak memiliki izin. Cek apakah project di Google Cloud sudah aktif.");
       } else {
-        setError("Gagal memproses: " + msg);
+        setError("Gagal: " + msg);
       }
     } finally { setIsGenerating(false); }
-  };
-
-  const handleSearchTrends = async () => {
-    const keySelected = await window.aistudio?.hasSelectedApiKey();
-    if (!keySelected) {
-      setHasApiKey(false);
-      await handleSetApiKey();
-      return;
-    }
-
-    if (!seoProduct) return;
-    setIsGenerating(true);
-    try {
-      const data = await getSEOTrends(seoProduct);
-      setSeoResult(data);
-    } catch (e) { setError("Gagal mengambil tren."); }
-    finally { setIsGenerating(false); }
   };
 
   const angles = [
@@ -200,133 +189,76 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     );
   }
 
-  if (activeItem === NavItem.LEARNING) {
-    return (
-      <main className="flex-1 overflow-y-auto p-12 bg-gray-50/50">
-        <LearningCenter />
-      </main>
-    );
-  }
-
   return (
     <main className="flex-1 overflow-y-auto p-6 lg:p-12 bg-gray-50/50 no-scrollbar">
       <div className="max-w-5xl mx-auto space-y-10 pb-40">
         
-        {/* API Key Connection Banner */}
+        {/* Connection Status Banner */}
         <div className="bg-slate-900 text-white p-6 rounded-[2.5rem] flex flex-wrap items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8 opacity-5">
               <Key size={100} />
             </div>
             <div className="flex items-center gap-4 relative z-10">
-                <div className={`p-3 rounded-2xl ${hasApiKey ? 'bg-teal-500' : 'bg-red-500 animate-pulse'}`}>
-                  {hasApiKey ? <ShieldCheck className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />}
+                <div className={`p-3 rounded-2xl ${keySource ? 'bg-teal-500' : 'bg-red-500 animate-pulse'}`}>
+                  {keySource === 'vercel' ? <Database className="w-6 h-6" /> : keySource === 'manual' ? <CheckCircle className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />}
                 </div>
                 <div>
                     <h4 className="font-black text-sm uppercase tracking-widest">
-                      API Status: {hasApiKey ? 'Connected' : 'Disconnected'}
+                      Koneksi: {keySource ? 'AKTIF' : 'TERPUTUS'}
                     </h4>
                     <p className="text-[10px] text-slate-400 font-bold uppercase">
-                      {hasApiKey ? 'Siap digunakan' : 'Hubungkan Key untuk memulai'}
+                      Sumber: {keySource === 'vercel' ? 'Vercel Env Vars' : keySource === 'manual' ? 'Manual Selection' : 'API Key Tidak Terdeteksi'}
                     </p>
                 </div>
             </div>
             <div className="flex items-center gap-3 relative z-10">
-                <a 
-                  href="https://ai.google.dev/gemini-api/docs/billing" 
-                  target="_blank" 
-                  className="hidden md:flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
-                >
-                  Info Billing <ExternalLink size={12} />
-                </a>
-                <button 
-                    onClick={handleSetApiKey}
-                    className={`flex items-center gap-3 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${hasApiKey ? 'bg-teal-500 border-teal-400' : 'bg-white text-slate-900 border-white hover:bg-teal-50'}`}
-                >
-                    <Key size={14} /> {hasApiKey ? 'Change API Key' : 'Connect API Key'}
-                </button>
+                {!keySource && (
+                    <button 
+                        onClick={handleSetApiKey}
+                        className="flex items-center gap-3 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white text-slate-900 border-white hover:bg-teal-50 transition-all"
+                    >
+                        <Key size={14} /> Hubungkan Manual
+                    </button>
+                )}
+                {keySource === 'vercel' && (
+                    <div className="px-4 py-2 bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded-xl text-[9px] font-black uppercase">
+                        Sistem Otomatis Aktif
+                    </div>
+                )}
             </div>
         </div>
 
         {/* Content Section */}
-        <div className={`relative transition-all duration-500 ${!hasApiKey ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
-          
+        <div className={`relative transition-all duration-500 ${!keySource ? 'opacity-40 blur-[2px] pointer-events-none' : ''}`}>
           <div className="bg-white rounded-[4rem] shadow-2xl border border-gray-100 p-10 lg:p-16">
             <h2 className="text-4xl font-black text-slate-900 flex items-center gap-6 mb-16">
               <span className="p-5 bg-teal-50 text-teal-600 rounded-[2rem] shadow-inner"><Wand2 className="w-10 h-10" /></span>
               {activeItem}
             </h2>
 
-            {activeItem === NavItem.SEO ? (
-               <div className="space-y-10">
-                  {/* SEO Content */}
-                  <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-gray-100">
-                    <h2 className="text-3xl font-black mb-8 flex items-center gap-4"><Search className="text-orange-500" /> Market Trends</h2>
-                    <div className="space-y-6">
-                      <input 
-                        value={seoProduct} 
-                        onChange={(e) => setSeoProduct(e.target.value)}
-                        placeholder="Nama produk..."
-                        className="w-full p-6 bg-gray-50 border-2 border-gray-100 rounded-3xl text-sm outline-none focus:border-orange-400"
-                      />
-                      <button 
-                        onClick={handleSearchTrends} 
-                        disabled={isGenerating || !seoProduct}
-                        className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xs uppercase"
-                      >
-                        {isGenerating ? <Loader2 className="animate-spin mx-auto" /> : "CARI TREN TERBARU"}
-                      </button>
-                    </div>
-                  </div>
-                  {/* ... results display ... */}
-               </div>
-            ) : (
-              <div className="space-y-12">
-                {/* 1. Sub Mode */}
+            <div className="space-y-12">
                 <div className="space-y-6">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-4 block">1. Pilih Sub-Mode Kreator</label>
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-4 block">1. Mode Kreator</label>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-3 bg-gray-50 rounded-[2.5rem]">
                     {activeItem === NavItem.COMMERCIAL && (
                       <>
                         <TabButton active={selectedSubMode === 'product'} onClick={() => setSelectedSubMode('product')} icon={Box} label="Product Shot" />
                         <TabButton active={selectedSubMode === 'fashion'} onClick={() => setSelectedSubMode('fashion')} icon={Shirt} label="AI Fashion" />
-                        <TabButton active={selectedSubMode === 'mockup'} onClick={() => setSelectedSubMode('mockup')} icon={Palette} label="Mockup" />
                       </>
                     )}
                     {activeItem === NavItem.UGC && (
-                      <>
-                        <TabButton active={selectedSubMode === 'real-pov'} onClick={() => setSelectedSubMode('real-pov')} icon={Hand} label="Real POV Hand" />
-                        <TabButton active={selectedSubMode === 'selfie'} onClick={() => setSelectedSubMode('selfie')} icon={UserSquare2} label="Selfie Rev" />
-                        <TabButton active={selectedSubMode === 'unboxing'} onClick={() => setSelectedSubMode('unboxing')} icon={PackageOpen} label="Unboxing Exp" />
-                        <TabButton active={selectedSubMode === 'lifestyle-flatlay'} onClick={() => setSelectedSubMode('lifestyle-flatlay')} icon={LayoutGrid} label="Flatlay" />
-                      </>
-                    )}
-                    {activeItem === NavItem.HUMAN && (
-                      <TabButton active={selectedSubMode === 'character'} onClick={() => setSelectedSubMode('character')} icon={User} label="AI Model" />
+                      <TabButton active={selectedSubMode === 'real-pov'} onClick={() => setSelectedSubMode('real-pov')} icon={Hand} label="Real POV" />
                     )}
                   </div>
                 </div>
 
-                {/* 2 & 3. Media Upload */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <ImageUploader 
-                    images={images} 
-                    setImages={setImages} 
-                    maxFiles={activeItem === NavItem.COMMERCIAL ? 4 : 1} 
-                    label="2. Unggah Media Utama" 
-                    compact={true} 
-                  />
-                  <ImageUploader 
-                    images={bgReference} 
-                    setImages={setBgReference} 
-                    maxFiles={1} 
-                    label="3. Gaya (Opsional)" 
-                    compact={true} 
-                  />
+                  <ImageUploader images={images} setImages={setImages} maxFiles={4} label="2. Foto Produk" compact={true} />
+                  <ImageUploader images={bgReference} setImages={setBgReference} maxFiles={1} label="3. Gaya (Opsional)" compact={true} />
                 </div>
 
-                {/* 4. Quality Selector with Billing Badges */}
                 <div className="space-y-6">
-                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-4 block">4. Resolusi & Kualitas</label>
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-4 block">4. Kualitas (Pilih 1K jika Akun Gratis)</label>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         {[
                           { id: ImageQuality.STANDARD, label: '1K Standard', free: true },
@@ -338,59 +270,29 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                             onClick={() => setQuality(q.id)} 
                             className={`relative flex flex-col items-center justify-center p-6 rounded-3xl text-[10px] font-black uppercase transition-all border-2 ${quality === q.id ? 'bg-teal-500 border-teal-500 text-white shadow-xl' : 'bg-white border-gray-100 text-gray-400 hover:border-teal-200'}`}
                           >
-                            {!q.free && (
-                                <div className="absolute -top-3 right-4 px-3 py-1 bg-amber-400 text-amber-900 rounded-full text-[8px] flex items-center gap-1 shadow-sm">
-                                    <Lock size={10} /> PAID ONLY
-                                </div>
-                            )}
+                            {!q.free && <div className="absolute -top-3 right-4 px-3 py-1 bg-amber-400 text-amber-900 rounded-full text-[8px] flex items-center gap-1 shadow-sm"><Lock size={10} /> PAID ONLY</div>}
                             <span className="text-lg mb-1">{q.label.split(' ')[0]}</span>
-                            <span className="opacity-60">{q.label.split(' ').slice(1).join(' ')}</span>
                           </button>
                         ))}
                     </div>
                 </div>
 
-                {/* 5. Ratio & Prompt */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                  <div className="space-y-6">
-                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-4 block">5. Format Media</label>
-                      <select value={ratio} onChange={e => setRatio(e.target.value as any)} className="w-full p-5 bg-gray-50 border-2 border-gray-100 rounded-2xl text-xs font-black tracking-widest uppercase outline-none focus:border-teal-400">
-                        <option value={AspectRatio.SQUARE}>1:1 SQUARE (Feed)</option>
-                        <option value={AspectRatio.PORTRAIT}>9:16 TALL (Reels/TikTok)</option>
-                        <option value={AspectRatio.LANDSCAPE}>16:9 WIDE (YouTube)</option>
-                      </select>
-                  </div>
-                  <div className="space-y-6">
-                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-4 block">6. Custom Deskripsi</label>
-                      <input value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Tambahkan instruksi khusus..." className="w-full p-5 bg-gray-50 border-2 border-gray-100 rounded-2xl text-xs outline-none focus:border-teal-400" />
-                  </div>
-                </div>
-                
                 <button 
                   onClick={handleGenerate} 
                   disabled={isGenerating} 
-                  className={`w-full py-8 rounded-[3rem] font-black text-white text-2xl shadow-3xl flex items-center justify-center gap-6 transition-all ${isGenerating ? 'bg-slate-400 cursor-not-allowed' : 'bg-teal-500 hover:bg-teal-600'}`}
+                  className={`w-full py-8 rounded-[3rem] font-black text-white text-2xl shadow-3xl flex items-center justify-center gap-6 transition-all ${isGenerating ? 'bg-slate-400' : 'bg-teal-500 hover:bg-teal-600'}`}
                 >
                   {isGenerating ? <Loader2 className="w-10 h-10 animate-spin" /> : <Sparkles className="w-10 h-10" />}
-                  <span>{isGenerating ? 'MENGHASILKAN...' : 'MULAI GENERATE'}</span>
+                  <span>{isGenerating ? 'MENGHASILKAN...' : 'MULAILAH MEMBUAT'}</span>
                 </button>
-              </div>
-            )}
+            </div>
 
             {error && (
                 <div className="mt-8 bg-red-50 border border-red-100 p-8 rounded-[2.5rem] flex items-start gap-6 animate-shake">
                     <AlertTriangle className="text-red-500 shrink-0 w-8 h-8" />
                     <div className="space-y-2">
-                        <p className="text-sm font-black text-red-600 uppercase tracking-tight">Terjadi Kesalahan</p>
+                        <p className="text-sm font-black text-red-600 uppercase tracking-tight">Terjadi Masalah</p>
                         <p className="text-xs text-red-500 leading-relaxed">{error}</p>
-                        {error.includes("Paid Project") && (
-                            <button 
-                                onClick={() => setQuality(ImageQuality.STANDARD)}
-                                className="mt-4 px-6 py-2 bg-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
-                            >
-                                Turunkan ke Kualitas Standar
-                            </button>
-                        )}
                     </div>
                 </div>
             )}
@@ -398,28 +300,25 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         </div>
 
         {results.length > 0 && (
-          <div className="space-y-10 animate-in slide-in-from-bottom-12 duration-1000">
-            <div className="bg-white p-8 lg:p-12 rounded-[3rem] shadow-xl border border-gray-100">
-                <div className={`grid gap-10 ${results.length > 1 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
-                    {results.map((url, i) => (
-                      <div key={i} className="group relative rounded-[2rem] overflow-hidden border-4 border-teal-100 shadow-2xl bg-white h-[500px]">
-                         <img src={url} className="w-full h-full object-cover" alt={`Result ${i}`} />
-                         <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-6 backdrop-blur-sm">
-                            <button onClick={() => setSelectedFullImage(url)} className="p-5 bg-white rounded-2xl text-slate-800 hover:scale-110 transition-transform"><Maximize2 size={24} /></button>
-                            <a href={url} download={`affiliate-media-${i}.png`} className="p-5 bg-teal-500 rounded-2xl text-white hover:scale-110 transition-transform"><Download size={24} /></a>
-                         </div>
-                      </div>
-                    ))}
-                </div>
-            </div>
+          <div className="bg-white p-8 lg:p-12 rounded-[3rem] shadow-xl border border-gray-100">
+              <div className="grid grid-cols-1 gap-10">
+                  {results.map((url, i) => (
+                    <div key={i} className="group relative rounded-[2rem] overflow-hidden border-4 border-teal-100 shadow-2xl bg-white h-[500px]">
+                       <img src={url} className="w-full h-full object-cover" alt="Result" />
+                       <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-6 backdrop-blur-sm">
+                          <button onClick={() => setSelectedFullImage(url)} className="p-5 bg-white rounded-2xl text-slate-800 hover:scale-110 transition-transform"><Maximize2 size={24} /></button>
+                          <a href={url} download="hasil-ai.png" className="p-5 bg-teal-500 rounded-2xl text-white hover:scale-110 transition-transform"><Download size={24} /></a>
+                       </div>
+                    </div>
+                  ))}
+              </div>
           </div>
         )}
       </div>
 
       {selectedFullImage && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
-            <button onClick={() => setSelectedFullImage(null)} className="absolute top-8 right-8 p-4 bg-white/10 text-white rounded-full transition-all"><X size={32} /></button>
-            <img src={selectedFullImage} className="max-w-full max-h-[90vh] rounded-[2rem] shadow-4xl object-contain border-4 border-white/10" alt="Full Preview" />
+        <div className="fixed inset-0 z-[60] bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-6" onClick={() => setSelectedFullImage(null)}>
+            <img src={selectedFullImage} className="max-w-full max-h-[90vh] rounded-[2rem] shadow-4xl object-contain" alt="Full Preview" />
         </div>
       )}
     </main>
