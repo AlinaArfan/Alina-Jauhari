@@ -12,7 +12,7 @@ import {
   Download, Sparkles, Loader2, ShoppingBag, Box, Smartphone, Megaphone,
   X, Maximize2, ShieldCheck, CheckCircle, AlertTriangle, LayoutGrid, Camera, Zap, ChevronLeft, ChevronRight,
   Shirt, Layers, Hand, PackageOpen, Wand2, Focus, Compass, ArrowRight, BarChart3, Trash2, Calendar, History as HistoryIcon,
-  Monitor, Youtube, Instagram
+  Monitor, Youtube, Instagram, MapPin, Sun
 } from 'lucide-react';
 
 const PRO_ANGLES = [
@@ -28,25 +28,19 @@ const PRO_ANGLES = [
 ];
 
 const ENVIRONMENTS = [
-  "Netral Home", "Studio", "Natural", "Bedroom", "Outdoor", 
-  "Ruang Tamu", "Dapur", "Mobil", "Meja Kerja", "Kamar Mandi"
+  "Netral Home", "Studio Professional", "Natural Light", "Modern Bedroom", "Outdoor Scenery", 
+  "Ruang Tamu Minimalis", "Dapur Estetik", "Interior Mobil", "Meja Kerja", "Kamar Mandi Mewah"
 ];
 
 const BATCH_SET = ["ECU", "FS", "TDA", "ULA", "S-P", "D-3Q"];
 
-// Definisi Prompt Spesifik untuk setiap Sub-Mode
 const SUB_MODE_PROMPTS: Record<string, string> = {
-  // Commercial Hub
   'product-shot': "Professional luxury studio photography, clean minimalist background, soft cinematic lighting, high-end commercial aesthetic.",
   'ai-fashion': "Photorealistic editorial fashion photography, high-quality human model wearing the garment, natural skin texture, professional lighting.",
   'mockup': "3D realistic product mockup, logo/design seamlessly integrated into a real-world object with perfect perspective and material physics.",
-  
-  // UGC Studio
   'selfie-review': "Authentic casual smartphone selfie, a real person holding the product with a natural smile, social media testimonial style.",
   'pov-hand': "First-person perspective (POV), realistic human hands interacting with or holding the product, natural everyday environment.",
   'unboxing-exp': "Atmospheric unboxing scene, product partially out of high-quality packaging, natural indoor morning light, organic home feel.",
-  
-  // Ads Studio
   'web-banner': "Wide landscape e-commerce web banner, professional marketing layout, clean space for text, high-resolution commercial graphics.",
   'youtube-thumbnail': "Vibrant high-contrast YouTube thumbnail style, bold colors, expressive composition, attention-grabbing visual elements.",
   'social-feed': "Aesthetic Instagram feed photography, lifestyle branding, trendy color grading, consistent social media visual language."
@@ -87,10 +81,9 @@ const Lightbox: React.FC<{
 const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) => void }> = ({ activeItem, setActiveItem }) => {
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [bgRef, setBgRef] = useState<UploadedImage[]>([]);
-  const [faceSource, setFaceSource] = useState<UploadedImage[]>([]);
   const [prompt, setPrompt] = useState("");
   const [subMode, setSubMode] = useState("product-shot");
-  const [style, setStyle] = useState("Studio");
+  const [activeStyle, setActiveStyle] = useState("Studio Professional");
   const [activeAngle, setActiveAngle] = useState("D-3Q"); 
   const [ratio, setRatio] = useState<AspectRatio>(AspectRatio.PORTRAIT);
   const [quality, setQuality] = useState<ImageQuality>(ImageQuality.STANDARD);
@@ -102,7 +95,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   const [textContent, setTextContent] = useState("");
   const [sources, setSources] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
-  
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   useEffect(() => {
@@ -118,7 +110,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     }
   }, [history]);
 
-  // Reset Sub-Mode saat Navigasi Berubah
   useEffect(() => {
     setResults([]);
     setTextContent("");
@@ -138,7 +129,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         return;
     }
 
-    // Cek API Key
     const hasKey = await (window as any).aistudio.hasSelectedApiKey();
     if (!hasKey) {
       await (window as any).aistudio.openSelectKey();
@@ -158,17 +148,17 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         setTextContent(res);
       } else {
         const baseSysPrompt = SUB_MODE_PROMPTS[subMode] || "";
-        const fullPrompt = `${baseSysPrompt} ${prompt}`.trim();
+        const userPrompt = `${activeStyle}. ${prompt}`.trim();
 
         let finalResults: {url: string, angle: string}[] = [];
         if (isBatchMode) {
           const promises = BATCH_SET.map(code => 
-            generateImage(images.map(i => i.file), bgRef[0]?.file || null, fullPrompt, style, ratio, quality, code)
+            generateImage(images.map(i => i.file), bgRef[0]?.file || null, baseSysPrompt, userPrompt, ratio, quality, code)
               .then(url => ({ url, angle: code }))
           );
           finalResults = await Promise.all(promises);
         } else {
-          const url = await generateImage(images.map(i => i.file), bgRef[0]?.file || null, fullPrompt, style, ratio, quality, activeAngle);
+          const url = await generateImage(images.map(i => i.file), bgRef[0]?.file || null, baseSysPrompt, userPrompt, ratio, quality, activeAngle);
           finalResults = [{ url, angle: activeAngle }];
         }
         setResults(finalResults);
@@ -184,9 +174,9 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     } catch (e: any) {
       if (e.message?.includes("API_KEY") || e.message?.includes("not found")) {
         await (window as any).aistudio.openSelectKey();
-        setError("API Key diperlukan. Silakan klik 'Select API Key' di atas.");
+        setError("Koneksi API Error. Silakan pilih API Key ulang.");
       } else {
-        setError(e.message || "Gagal menghasilkan gambar.");
+        setError(e.message || "Gagal memproses gambar.");
       }
     } finally {
       setIsGenerating(false);
@@ -279,9 +269,15 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                   <div className="p-4 bg-teal-50 text-teal-600 rounded-2xl"><Wand2 size={28} /></div>
                   <h2 className="text-3xl font-black text-slate-900 tracking-tight">{activeItem}</h2>
                </div>
+               {![NavItem.SEO, NavItem.COPYWRITER, NavItem.HOME, NavItem.HISTORY, NavItem.LEARNING].includes(activeItem) && (
+                 <button onClick={() => setIsBatchMode(!isBatchMode)} className={`flex items-center gap-3 px-6 py-3 rounded-2xl transition-all border-2 ${isBatchMode ? 'bg-teal-500 border-teal-500 text-white shadow-lg' : 'bg-white border-gray-100 text-slate-400'}`}>
+                    <LayoutGrid size={16} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Batch Pro Mode {isBatchMode ? 'ON' : 'OFF'}</span>
+                 </button>
+               )}
             </div>
 
-            {/* SELEKSI SUB-MODE (KEMBALI LENGKAP) */}
+            {/* STUDIOS SUB-MODES */}
             {(activeItem === NavItem.COMMERCIAL || activeItem === NavItem.UGC || activeItem === NavItem.ADS) && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {activeItem === NavItem.COMMERCIAL && [
@@ -320,6 +316,39 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                 </div>
             )}
 
+            {/* LINGKUNGAN & LIGHTING - KEMBALI DIMUNCULKAN */}
+            {![NavItem.SEO, NavItem.COPYWRITER].includes(activeItem) && (
+              <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2 flex items-center gap-2">
+                   <Sun size={12} /> Lingkungan & Lighting
+                </label>
+                <div className="flex flex-wrap gap-2">
+                    {ENVIRONMENTS.map(env => (
+                        <button key={env} onClick={() => setActiveStyle(env)} className={`px-5 py-3 rounded-2xl text-[9px] font-black uppercase border-2 transition-all ${activeStyle === env ? 'bg-slate-900 border-slate-900 text-white shadow-lg' : 'bg-gray-50 border-gray-100 text-slate-400 hover:border-teal-300'}`}>
+                            {env}
+                        </button>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* PRO SHOT ANGLES - KEMBALI DIMUNCULKAN */}
+            {!isBatchMode && ![NavItem.SEO, NavItem.COPYWRITER].includes(activeItem) && (
+                <div className="space-y-4">
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2 flex items-center gap-2">
+                       <Camera size={12} /> Pro Shot Angles
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                        {PRO_ANGLES.map(a => (
+                            <button key={a.code} onClick={() => setActiveAngle(a.code)} className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase border-2 transition-all ${activeAngle === a.code ? 'bg-teal-500 border-teal-500 text-white shadow-md' : 'bg-white border-gray-100 text-slate-400'}`}>
+                                <span className="font-black block text-[11px]">{a.code}</span>
+                                <span className="text-[8px] opacity-70">{a.name}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
               <ImageUploader images={images} setImages={setImages} maxFiles={4} label="Foto Produk Utama" compact />
               {activeItem !== NavItem.COPYWRITER && <ImageUploader images={bgRef} setImages={setBgRef} maxFiles={1} label="Background Ref" compact />}
@@ -328,23 +357,23 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
             <div className="space-y-10">
                 <div className="space-y-4">
                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Custom Instruction</label>
-                    <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Misal: 'Sepatu lari di atas batu granit dengan pencahayaan dramatis'..." className="w-full h-24 bg-gray-50 border-2 border-gray-100 p-6 rounded-[2rem] outline-none focus:border-teal-500 text-sm font-medium" />
+                    <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Misal: 'Tambahkan efek embun pada botol' atau 'Buat suasana lebih dramatis'..." className="w-full h-24 bg-gray-50 border-2 border-gray-100 p-6 rounded-[2rem] outline-none focus:border-teal-500 text-sm font-medium" />
                 </div>
                 <div className="flex gap-4">
-                  <select value={quality} onChange={e => setQuality(e.target.value as ImageQuality)} className="flex-1 bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-xs font-black uppercase">
+                  <select value={quality} onChange={e => setQuality(e.target.value as ImageQuality)} className="flex-1 bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-xs font-black uppercase outline-none focus:border-teal-500">
                     <option value={ImageQuality.STANDARD}>1K Standard</option>
                     <option value={ImageQuality.HD_2K}>2K Pro</option>
                     <option value={ImageQuality.ULTRA_HD_4K}>4K Ultra</option>
                   </select>
-                  <select value={ratio} onChange={e => setRatio(e.target.value as AspectRatio)} className="flex-1 bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-xs font-black uppercase">
+                  <select value={ratio} onChange={e => setRatio(e.target.value as AspectRatio)} className="flex-1 bg-gray-50 border-2 border-gray-100 p-4 rounded-2xl text-xs font-black uppercase outline-none focus:border-teal-500">
                     <option value={AspectRatio.SQUARE}>1:1 Square</option>
                     <option value={AspectRatio.PORTRAIT}>9:16 Portrait</option>
                     <option value={AspectRatio.LANDSCAPE}>16:9 Landscape</option>
                   </select>
                 </div>
-                <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-8 rounded-[2.5rem] font-black text-white text-xl flex items-center justify-center gap-4 transition-all ${isGenerating ? 'bg-slate-400' : 'bg-teal-500 hover:bg-teal-600 shadow-2xl'}`}>
+                <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-8 rounded-[2.5rem] font-black text-white text-xl flex items-center justify-center gap-4 transition-all ${isGenerating ? 'bg-slate-400' : 'bg-teal-500 hover:bg-teal-600 shadow-2xl hover:scale-[1.01]'}`}>
                     {isGenerating ? <Loader2 className="animate-spin" /> : <Zap size={24} />}
-                    <span>{isGenerating ? 'PROCESSING...' : 'START GENERATION'}</span>
+                    <span>{isGenerating ? 'PROCESSING...' : isBatchMode ? 'GENERATE 6 PRO SHOTS' : 'START GENERATION'}</span>
                 </button>
             </div>
             {error && <div className="p-5 bg-red-50 text-red-500 rounded-2xl font-bold text-xs text-center border border-red-100">{error}</div>}
@@ -354,22 +383,22 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
           <div className="bg-white p-10 lg:p-16 rounded-[4rem] shadow-2xl border border-gray-100 animate-in fade-in">
               <div className="flex items-center justify-between mb-8 border-b pb-8">
                   <h3 className="text-2xl font-black text-slate-900">Hasil Magic Picture</h3>
-                  <button onClick={() => {setResults([]); setTextContent("");}} className="text-slate-300 hover:text-red-500"><X size={32} /></button>
+                  <button onClick={() => {setResults([]); setTextContent("");}} className="text-slate-300 hover:text-red-500 transition-colors"><X size={32} /></button>
               </div>
               {results.length > 0 ? (
-                 <div className="grid gap-8 grid-cols-1">
+                 <div className={`grid gap-8 ${isBatchMode ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
                     {results.map((res, i) => (
-                      <div key={i} className="group relative rounded-[2rem] overflow-hidden border-4 border-gray-50 bg-slate-50">
+                      <div key={i} className="group relative rounded-[2rem] overflow-hidden border-4 border-gray-50 bg-slate-50 transition-all hover:border-teal-500">
                          <AngleBadge label={res.angle} />
-                         <img src={res.url} className="w-full aspect-[3/4] object-cover" />
+                         <img src={res.url} className="w-full aspect-[3/4] object-cover" alt="Generated" />
                          <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-4">
-                            <button onClick={() => setSelectedIdx(i)} className="p-4 bg-white rounded-xl"><Maximize2 size={20} /></button>
-                            <a href={res.url} download className="p-4 bg-teal-500 rounded-xl text-white"><Download size={20} /></a>
+                            <button onClick={() => setSelectedIdx(i)} className="p-4 bg-white rounded-xl text-slate-900 hover:bg-teal-50"><Maximize2 size={20} /></button>
+                            <a href={res.url} download className="p-4 bg-teal-500 rounded-xl text-white hover:bg-teal-600"><Download size={20} /></a>
                          </div>
                       </div>
                     ))}
                  </div>
-              ) : <div className="prose text-slate-600 font-bold whitespace-pre-wrap">{textContent}</div>}
+              ) : <div className="prose text-slate-600 font-bold whitespace-pre-wrap leading-relaxed">{textContent}</div>}
           </div>
         )}
       </div>
