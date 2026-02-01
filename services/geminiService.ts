@@ -29,17 +29,17 @@ export const generateImage = async (
   quality: ImageQuality,
   angleDesc: string
 ): Promise<string> => {
-  // Access key safely from process.env (shimmed in index.tsx if needed)
+  // Use strictly process.env.API_KEY
   const apiKey = process.env.API_KEY;
   
   if (!apiKey || apiKey === "undefined") {
-    throw new Error("API_KEY tidak terdeteksi. Silakan pastikan Environment Variable di Vercel sudah benar dan lakukan Re-deploy.");
+    throw new Error("API_KEY tidak terdeteksi. Silakan Re-deploy di Vercel setelah memasukkan API_KEY di Settings.");
   }
 
   const isPro = quality === ImageQuality.HD_2K || quality === ImageQuality.ULTRA_HD_4K;
   const modelName = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
 
-  // Initialize strictly with the provided API key
+  // New instance for every call to ensure fresh context
   const ai = new GoogleGenAI({ apiKey });
   
   const config: any = { 
@@ -60,11 +60,8 @@ export const generateImage = async (
     STYLE: ${systemPrompt}.
     ENVIRONMENT: ${userPrompt}.
     SHOT: ${angleDesc}.
-    
-    [GUIDELINES]:
-    - Keep product shape and branding 100% authentic.
-    - Professional lighting and commercial focus.
-    - Cinematic background integration.
+    - Keep product shape authentic.
+    - Cinematic commercial lighting.
   `.trim();
 
   const parts = [
@@ -86,9 +83,9 @@ export const generateImage = async (
       return `data:image/png;base64,${part.inlineData.data}`;
     }
     
-    throw new Error("Model tidak mengembalikan data gambar. Silakan coba prompt lain.");
+    throw new Error("Model tidak memberikan gambar. Gunakan deskripsi yang lebih spesifik.");
   } catch (err: any) {
-    console.error("Gemini Service Error:", err);
+    console.error("Gemini API Error:", err);
     throw err;
   }
 };
@@ -98,22 +95,22 @@ export const generateImage = async (
  */
 export const getSEOTrends = async (query: string): Promise<{ text: string; sources: any[] }> => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey === "undefined") return { text: "API Key tidak disetel di Vercel.", sources: [] };
+  if (!apiKey || apiKey === "undefined") return { text: "API Key tidak disetel.", sources: [] };
   
   const ai = new GoogleGenAI({ apiKey });
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Analisis mendalam tren e-commerce 2025: ${query}. Berikan insight produk viral, keyword pencarian tertinggi, dan strategi affiliate marketing.`,
+      contents: `Analisis tren e-commerce 2025: ${query}. Berikan insight produk viral dan keyword pencarian tertinggi.`,
       config: { tools: [{ googleSearch: {} }] }
     });
     return {
-      text: response.text || "Tidak ada data tren ditemukan.",
+      text: response.text || "Tidak ada data ditemukan.",
       sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || []
     };
   } catch (err) {
     console.error("SEO Error:", err);
-    return { text: "Gagal memuat tren SEO. Cek konfigurasi API Key.", sources: [] };
+    return { text: "Gagal memuat tren SEO.", sources: [] };
   }
 };
 
@@ -129,11 +126,11 @@ export const generateCopywriting = async (file: File, type: string): Promise<str
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: { parts: [imgPart, { text: `Tulis ${type} yang sangat persuasif untuk produk ini menggunakan formula AIDA. Gunakan bahasa gaul e-commerce Indonesia.` }] }
+      contents: { parts: [imgPart, { text: `Tulis ${type} persuasif AIDA untuk produk ini.` }] }
     });
     return response.text || "Gagal menghasilkan teks.";
   } catch (err) {
     console.error("Copywriting Error:", err);
-    return "Terjadi kesalahan saat membuat copywriting.";
+    return "Terjadi kesalahan pada Marketing Lab.";
   }
 };
