@@ -14,13 +14,10 @@ const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType:
   });
 };
 
-const getEffectiveApiKey = (): string | null => {
-  const savedKey = localStorage.getItem('GEMINI_API_KEY');
-  if (savedKey) return savedKey;
-  // @ts-ignore
-  return process.env.API_KEY || import.meta.env.VITE_API_KEY || null;
-};
-
+/**
+ * Generates an image using Gemini's image models.
+ * Uses gemini-3-pro-image-preview for high quality (2K/4K) and gemini-2.5-flash-image otherwise.
+ */
 export const generateImage = async (
   subjectFiles: File[],
   referenceFile: File | null,
@@ -30,16 +27,11 @@ export const generateImage = async (
   quality: ImageQuality,
   angleDesc: string
 ): Promise<string> => {
-  const apiKey = getEffectiveApiKey();
-  if (!apiKey) throw new Error("API Key tidak ditemukan.");
-
-  const subjectParts = await Promise.all(subjectFiles.map(file => fileToPart(file)));
-  const referencePart = referenceFile ? await fileToPart(referenceFile) : null;
-  
   const isPro = quality === ImageQuality.HD_2K || quality === ImageQuality.ULTRA_HD_4K;
   const modelName = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
 
-  const ai = new GoogleGenAI({ apiKey });
+  // Always use process.env.API_KEY directly and initialize right before usage
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
   
   const config: any = { 
     imageConfig: { 
@@ -51,6 +43,9 @@ export const generateImage = async (
     config.imageConfig.imageSize = quality;
   }
 
+  const subjectParts = await Promise.all(subjectFiles.map(file => fileToPart(file)));
+  const referencePart = referenceFile ? await fileToPart(referenceFile) : null;
+  
   // ENHANCED FIDELITY PROMPT
   const coreInstruction = `
     [OBJECTIVE: ABSOLUTE FIDELITY RECONSTRUCTION]
@@ -79,14 +74,17 @@ export const generateImage = async (
     config: config
   });
 
+  // Extract the image part correctly from the response candidates
   const part = response.candidates?.[0].content?.parts?.find(p => p.inlineData);
   if (part?.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
   throw new Error("Gagal menghasilkan gambar. Pastikan API Key valid dan coba kurangi jumlah file.");
 };
 
+/**
+ * Analyzes SEO trends using Google Search grounding.
+ */
 export const getSEOTrends = async (productName: string): Promise<{ text: string; sources: any[] }> => {
-  const apiKey = getEffectiveApiKey();
-  const ai = new GoogleGenAI({ apiKey: apiKey! });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `Analisis mendalam tren pasar 2025 untuk: ${productName}. Berikan strategi marketing spesifik, hashtag viral, dan analisis kompetitor di Marketplace.`,
@@ -98,9 +96,11 @@ export const getSEOTrends = async (productName: string): Promise<{ text: string;
   };
 };
 
+/**
+ * Generates profesional copywriting based on image input.
+ */
 export const generateCopywriting = async (file: File, type: string): Promise<string> => {
-  const apiKey = getEffectiveApiKey();
-  const ai = new GoogleGenAI({ apiKey: apiKey! });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
   const imgPart = await fileToPart(file);
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
