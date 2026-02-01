@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Modality, LiveServerMessage } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { AspectRatio, ImageQuality } from "../types";
 
 const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
@@ -14,6 +14,19 @@ const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType:
   });
 };
 
+const getEffectiveApiKey = (): string | null => {
+  // 1. Cek Manual Input (LocalStorage) - Paling Prioritas jika env gagal
+  const savedKey = localStorage.getItem('GEMINI_API_KEY');
+  if (savedKey) return savedKey;
+
+  // 2. Cek Vercel/Vite Env
+  // @ts-ignore
+  const envKey = process.env.API_KEY || import.meta.env.VITE_API_KEY;
+  if (envKey) return envKey;
+
+  return null;
+};
+
 export const generateImage = async (
   subjectFiles: File[],
   referenceFile: File | null,
@@ -23,15 +36,14 @@ export const generateImage = async (
   quality: ImageQuality,
   angle: string
 ): Promise<string> => {
+  const apiKey = getEffectiveApiKey();
+  if (!apiKey) throw new Error("API Key tidak ditemukan. Sila masukkan kunci di Dashboard.");
+
   const subjectParts = await Promise.all(subjectFiles.map(file => fileToPart(file)));
   const referencePart = referenceFile ? await fileToPart(referenceFile) : null;
   
   const isPro = quality === ImageQuality.HD_2K || quality === ImageQuality.ULTRA_HD_4K;
   const modelName = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-
-  // Selalu buat instance baru sebelum pemanggilan untuk memastikan API KEY terbaru digunakan
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) throw new Error("API Key tidak ditemukan. Silakan hubungkan kembali.");
 
   const ai = new GoogleGenAI({ apiKey });
   
@@ -73,7 +85,7 @@ export const generateImage = async (
 };
 
 export const getSEOTrends = async (productName: string): Promise<{ text: string; sources: any[] }> => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = getEffectiveApiKey();
   const ai = new GoogleGenAI({ apiKey: apiKey! });
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
@@ -87,7 +99,7 @@ export const getSEOTrends = async (productName: string): Promise<{ text: string;
 };
 
 export const generateCopywriting = async (file: File, type: 'caption' | 'benefits' | 'hashtags'): Promise<string> => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = getEffectiveApiKey();
   const ai = new GoogleGenAI({ apiKey: apiKey! });
   const imgPart = await fileToPart(file);
   const response = await ai.models.generateContent({
