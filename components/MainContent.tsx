@@ -97,16 +97,30 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   const [error, setError] = useState<string | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
+  // Safe load from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('MAGIC_PICTURE_HISTORY');
     if (saved) {
-      try { setHistory(JSON.parse(saved)); } catch (e) { console.error("History load error:", e); }
+      try { 
+        setHistory(JSON.parse(saved)); 
+      } catch (e) { 
+        console.error("History load error:", e); 
+        localStorage.removeItem('MAGIC_PICTURE_HISTORY');
+      }
     }
   }, []);
 
+  // Safe save to localStorage with Quota Handling
   useEffect(() => {
     if (history.length > 0) {
-      localStorage.setItem('MAGIC_PICTURE_HISTORY', JSON.stringify(history.slice(0, 50)));
+      try {
+        // Limit history to 15 items because AI images are huge (base64)
+        const historyToSave = history.slice(0, 15);
+        localStorage.setItem('MAGIC_PICTURE_HISTORY', JSON.stringify(historyToSave));
+      } catch (e) {
+        console.warn("Storage Quota Exceeded. History will not be saved until cleared.");
+        // We don't alert here to avoid annoying the user, just log it.
+      }
     }
   }, [history]);
 
@@ -122,6 +136,13 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     else if (activeItem === NavItem.ADS) setSubMode("web-banner");
   }, [activeItem]);
 
+  const clearHistory = () => {
+    if (confirm("Hapus semua riwayat galeri? Tindakan ini tidak bisa dibatalkan.")) {
+      setHistory([]);
+      localStorage.removeItem('MAGIC_PICTURE_HISTORY');
+    }
+  };
+
   const handleGenerate = async () => {
     if (images.length === 0 && ![NavItem.SEO, NavItem.COPYWRITER].includes(activeItem)) {
         setError("Mohon unggah foto produk terlebih dahulu.");
@@ -132,16 +153,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     setError(null); 
     
     try {
-      // 1. Silent Check for AI Studio (Don't crash if missing)
-      const aiStudio = (window as any).aistudio;
-      if (aiStudio && typeof aiStudio.hasSelectedApiKey === 'function') {
-        const hasKey = await aiStudio.hasSelectedApiKey();
-        if (!hasKey) {
-            await aiStudio.openSelectKey();
-        }
-      }
-
-      // 2. Proccess Generation
       if (activeItem === NavItem.SEO) {
         const res = await getSEOTrends(prompt || "Tren affiliate marketing terbaru");
         setTextContent(res.text);
@@ -179,13 +190,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     } catch (e: any) {
       console.error("Critical Generation Error:", e);
       let errorMsg = e.message || "Gagal memproses permintaan.";
-      
-      if (errorMsg.includes("API_KEY") || errorMsg.includes("not found")) {
-        const aiStudio = (window as any).aistudio;
-        if (aiStudio) await aiStudio.openSelectKey();
-        errorMsg = "API Key bermasalah. Pastikan API_KEY sudah diset di Environment Variables Vercel.";
-      }
-      
       setError(errorMsg);
     } finally {
       setIsGenerating(false);
@@ -236,7 +240,17 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     return (
       <main className="flex-1 overflow-y-auto p-6 lg:p-12 bg-gray-50/50 no-scrollbar">
          <div className="max-w-6xl mx-auto space-y-10">
-            <h1 className="text-4xl font-black text-slate-900">Riwayat Galeri</h1>
+            <div className="flex justify-between items-center">
+              <h1 className="text-4xl font-black text-slate-900">Riwayat Galeri</h1>
+              {history.length > 0 && (
+                <button 
+                  onClick={clearHistory}
+                  className="flex items-center gap-2 px-6 py-3 bg-red-50 text-red-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-100 transition-all"
+                >
+                  <Trash2 size={14} /> Hapus Semua
+                </button>
+              )}
+            </div>
             {history.length === 0 ? (
                 <div className="bg-white p-20 rounded-[3rem] text-center border-2 border-dashed border-gray-100 text-slate-400 font-bold uppercase tracking-widest text-xs">Belum ada riwayat konten</div>
             ) : (
@@ -273,7 +287,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                     <p className="text-[9px] text-slate-400 font-bold uppercase">Ready to generate</p>
                 </div>
             </div>
-            <button onClick={() => (window as any).aistudio?.openSelectKey?.()} className="px-5 py-2.5 bg-white text-slate-900 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-teal-50">Select API Key</button>
         </div>
 
         <div className="bg-white rounded-[3.5rem] shadow-2xl border border-gray-100 p-10 lg:p-16 space-y-12">
