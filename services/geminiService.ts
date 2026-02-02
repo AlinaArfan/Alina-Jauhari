@@ -105,7 +105,10 @@ export const generateVideo = async (
     return URL.createObjectURL(blob);
   } catch (err: any) {
     if (err.message?.includes("Requested entity was not found")) {
-      await (window as any).aistudio.openSelectKey();
+      // Guard clause to prevent crash if running outside AI Studio environment
+      if ((window as any).aistudio && (window as any).aistudio.openSelectKey) {
+        await (window as any).aistudio.openSelectKey();
+      }
       throw new Error("Sesi API kadaluarsa. Silakan pilih API Key berbayar Anda kembali.");
     }
     throw err;

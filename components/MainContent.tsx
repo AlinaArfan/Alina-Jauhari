@@ -130,8 +130,12 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     
     try {
       if (activeItem === NavItem.VIDEO) {
-        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-        if (!hasKey) await (window as any).aistudio.openSelectKey();
+        // Guard clause to prevent crash if running outside AI Studio environment
+        if ((window as any).aistudio && (window as any).aistudio.hasSelectedApiKey) {
+          const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+          if (!hasKey) await (window as any).aistudio.openSelectKey();
+        }
+        
         const finalPrompt = `Professional product showcase video. ${activeStyle}. ${prompt}. Cinematic motion.`;
         const videoUrl = await generateVideo(finalPrompt, ratio === AspectRatio.LANDSCAPE ? '16:9' : '9:16', '720p', images[0]?.file);
         setVideoResult(videoUrl);
