@@ -103,22 +103,17 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
-  const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
 
-  // New states for extra features
-  const [generatingVideoIdx, setGeneratingVideoIdx] = useState<number | null>(null);
+  // States for extra features (Only Audio/Voice Over now)
   const [generatingAudioIdx, setGeneratingAudioIdx] = useState<number | null>(null);
-  const [extraVideos, setExtraVideos] = useState<Record<number, string>>({});
   const [extraAudios, setExtraAudios] = useState<Record<number, string>>({});
 
-  // Set default submode when activeItem changes
   useEffect(() => {
     if (SUB_MODES[activeItem]) {
       setSubMode(SUB_MODES[activeItem][0].id);
     }
   }, [activeItem]);
 
-  // Load History
   useEffect(() => {
     const saved = localStorage.getItem('MAGIC_PICTURE_HISTORY');
     if (saved) {
@@ -126,7 +121,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     }
   }, []);
 
-  // Save History
   useEffect(() => {
     if (history.length > 0) {
       try { localStorage.setItem('MAGIC_PICTURE_HISTORY', JSON.stringify(history.slice(0, 15))); } catch (e) { console.warn("Quota exceeded"); }
@@ -143,7 +137,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     setError(null); 
     setResults([]);
     setVideoResult(null);
-    setExtraVideos({});
     setExtraAudios({});
     
     try {
@@ -205,23 +198,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     } finally {
       setIsGenerating(false);
       setBatchProgress({ current: 0, total: 0 });
-    }
-  };
-
-  const handleGenerateVideoForResult = async (idx: number, imageUrl: string) => {
-    setGeneratingVideoIdx(idx);
-    try {
-        const videoUrl = await generateVideo(
-            `Professional marketing video for this product. Cinematic lighting. Motion zoom. ${activeStyle}`,
-            ratio === AspectRatio.LANDSCAPE ? '16:9' : '9:16',
-            '720p',
-            imageUrl
-        );
-        setExtraVideos(prev => ({ ...prev, [idx]: videoUrl }));
-    } catch (e: any) {
-        setError("Gagal membuat video promo: " + e.message);
-    } finally {
-        setGeneratingVideoIdx(null);
     }
   };
 
@@ -473,7 +449,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                   <h3 className="text-3xl font-black text-slate-900 flex items-center gap-4">
                       Gallery Hasil {batchEnabled && <span className="text-xs bg-teal-500 text-white px-5 py-1.5 rounded-full">{results.length} Files</span>}
                   </h3>
-                  <button onClick={() => {setResults([]); setVideoResult(null); setExtraVideos({}); setExtraAudios({});}} className="text-slate-200 hover:text-red-500 transition-all hover:rotate-90"><X size={40} /></button>
+                  <button onClick={() => {setResults([]); setVideoResult(null); setExtraAudios({});}} className="text-slate-200 hover:text-red-500 transition-all hover:rotate-90"><X size={40} /></button>
               </div>
               
               {videoResult ? (
@@ -500,40 +476,25 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                                 <a href={res.url} download={`magic-picture-${i}.png`} className="p-5 bg-teal-500 rounded-2xl text-white hover:scale-110 transition-transform shadow-lg" title="Download Image"><Download size={24} /></a>
                             </div>
 
-                            {/* EXTRA AI FEATURES TOOLBAR */}
+                            {/* EXTRA AI FEATURES TOOLBAR - Voice Over Only */}
                             <div className="flex flex-col gap-3 w-full px-12 animate-in slide-in-from-bottom-4">
                                 <div className="h-px bg-white/10 w-full mb-1" />
                                 
-                                {/* Video Generate Button */}
-                                {extraVideos[i] ? (
-                                    <div className="space-y-2">
-                                        <video src={extraVideos[i]} controls className="w-full h-24 rounded-xl bg-black border border-white/20" />
-                                        <a href={extraVideos[i]} download="magic-promo.mp4" className="block text-center py-2 bg-purple-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-purple-700">Simpan Video</a>
-                                    </div>
-                                ) : (
-                                    <button 
-                                        disabled={generatingVideoIdx === i}
-                                        onClick={() => handleGenerateVideoForResult(i, res.url)}
-                                        className="w-full flex items-center justify-center gap-3 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-[10px] font-black uppercase tracking-widest border border-white/10 transition-all"
-                                    >
-                                        {generatingVideoIdx === i ? <Loader2 size={14} className="animate-spin" /> : <FileVideo size={14} />}
-                                        {generatingVideoIdx === i ? 'Processing Video...' : 'Video Promo AI'}
-                                    </button>
-                                )}
-
-                                {/* Voice Over Button */}
                                 {extraAudios[i] ? (
-                                    <div className="flex items-center gap-3 bg-white/20 p-2 rounded-xl">
-                                        <Volume2 size={16} className="text-teal-400" />
-                                        <audio src={extraAudios[i]} controls className="h-6 flex-1 filter invert" />
+                                    <div className="flex flex-col gap-2 items-center bg-white/20 p-3 rounded-2xl w-full">
+                                        <div className="flex items-center gap-3 w-full">
+                                            <Volume2 size={20} className="text-teal-400" />
+                                            <audio src={extraAudios[i]} controls className="h-8 flex-1 filter invert" />
+                                        </div>
+                                        <a href={extraAudios[i]} download={`vo-${i}.wav`} className="text-[9px] font-black text-teal-400 uppercase tracking-widest hover:text-white">Simpan Audio</a>
                                     </div>
                                 ) : (
                                     <button 
                                         disabled={generatingAudioIdx === i}
                                         onClick={() => handleGenerateVoiceOverForResult(i, res.url)}
-                                        className="w-full flex items-center justify-center gap-3 py-3 rounded-xl bg-teal-500/80 hover:bg-teal-500 text-white text-[10px] font-black uppercase tracking-widest transition-all"
+                                        className="w-full flex items-center justify-center gap-3 py-4 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-xl"
                                     >
-                                        {generatingAudioIdx === i ? <Loader2 size={14} className="animate-spin" /> : <Mic size={14} />}
+                                        {generatingAudioIdx === i ? <Loader2 size={16} className="animate-spin" /> : <Mic size={16} />}
                                         {generatingAudioIdx === i ? 'Processing Voice...' : 'Voice Over AI'}
                                     </button>
                                 )}
