@@ -127,6 +127,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     setIsGenerating(true); 
     setError(null); 
     setResults([]);
+    setVideoResult(null); // FIX: Reset video result when starting a new generation
     
     try {
       if (activeItem === NavItem.VIDEO) {
