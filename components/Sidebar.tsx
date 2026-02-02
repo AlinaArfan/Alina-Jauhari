@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { 
-  Home, Wand2, ShoppingBag, Megaphone, Users, Smartphone, Sparkles, Search, Mic2, BookOpen, PenTool, GraduationCap, History
+  Home, Wand2, ShoppingBag, Megaphone, Users, Smartphone, Sparkles, Search, Mic2, BookOpen, PenTool, GraduationCap, History, Video
 } from 'lucide-react';
 import { NavItem } from '../types';
 
@@ -18,6 +18,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem, setActiveItem, isOpen, on
     { id: NavItem.HISTORY, label: 'Riwayat Galeri', icon: History },
     { id: NavItem.COMMERCIAL, label: 'Commercial Hub', icon: ShoppingBag },
     { id: NavItem.UGC, label: 'UGC Studio', icon: Smartphone },
+    { id: NavItem.VIDEO, label: 'Video Studio', icon: Video },
     { id: NavItem.ADS, label: 'Ads Studio', icon: Megaphone },
     { id: NavItem.HUMAN, label: 'Human Studio', icon: Users },
     { id: NavItem.MAGIC, label: 'Magic Tools', icon: Sparkles },

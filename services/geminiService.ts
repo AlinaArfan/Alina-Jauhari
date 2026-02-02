@@ -29,108 +29,107 @@ export const generateImage = async (
   quality: ImageQuality,
   angleDesc: string
 ): Promise<string> => {
-  // Use strictly process.env.API_KEY
   const apiKey = process.env.API_KEY;
-  
   if (!apiKey || apiKey === "undefined") {
     throw new Error("API_KEY tidak terdeteksi. Silakan Re-deploy di Vercel setelah memasukkan API_KEY di Settings.");
   }
 
   const isPro = quality === ImageQuality.HD_2K || quality === ImageQuality.ULTRA_HD_4K;
   const modelName = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-
-  // New instance for every call to ensure fresh context
   const ai = new GoogleGenAI({ apiKey });
   
-  const config: any = { 
-    imageConfig: { 
-      aspectRatio: aspectRatio as any
-    } 
-  };
-
-  if (isPro) {
-    config.imageConfig.imageSize = quality;
-  }
+  const config: any = { imageConfig: { aspectRatio: aspectRatio as any } };
+  if (isPro) config.imageConfig.imageSize = quality;
 
   const subjectParts = await Promise.all(subjectFiles.map(file => fileToPart(file)));
   const referencePart = referenceFile ? await fileToPart(referenceFile) : null;
   
-  const coreInstruction = `
-    [TASK: HIGHEST QUALITY PRODUCT RENDERING]
-    STYLE: ${systemPrompt}.
-    ENVIRONMENT: ${userPrompt}.
-    SHOT: ${angleDesc}.
-    - Keep product shape authentic.
-    - Cinematic commercial lighting.
-  `.trim();
-
   const parts = [
     { text: "SOURCE PRODUCT IMAGES:" },
     ...subjectParts,
     ...(referencePart ? [{ text: "STYLE REFERENCE:" }, referencePart] : []),
-    { text: coreInstruction }
+    { text: `[TASK: HIGHEST QUALITY PRODUCT RENDERING] STYLE: ${systemPrompt}. ENVIRONMENT: ${userPrompt}. SHOT: ${angleDesc}.` }
   ];
 
+  const response = await ai.models.generateContent({ model: modelName, contents: { parts }, config: config });
+  const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+  if (part?.inlineData?.data) return `data:image/png;base64,${part.inlineData.data}`;
+  throw new Error("Model tidak memberikan gambar.");
+};
+
+/**
+ * Generates a video using Veo 3.1 models.
+ */
+export const generateVideo = async (
+  prompt: string,
+  aspectRatio: '16:9' | '9:16',
+  resolution: '720p' | '1080p',
+  imageFile?: File
+): Promise<string> => {
+  const apiKey = process.env.API_KEY;
+  const ai = new GoogleGenAI({ apiKey: apiKey! });
+
+  let imagePayload = undefined;
+  if (imageFile) {
+    const part = await fileToPart(imageFile);
+    imagePayload = {
+      imageBytes: part.inlineData.data,
+      mimeType: part.inlineData.mimeType
+    };
+  }
+
   try {
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: { parts },
-      config: config
+    let operation = await ai.models.generateVideos({
+      model: 'veo-3.1-fast-generate-preview',
+      prompt: prompt,
+      image: imagePayload,
+      config: {
+        numberOfVideos: 1,
+        resolution: resolution,
+        aspectRatio: aspectRatio
+      }
     });
 
-    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    if (part?.inlineData?.data) {
-      return `data:image/png;base64,${part.inlineData.data}`;
+    // Polling for completion
+    while (!operation.done) {
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      operation = await ai.operations.getVideosOperation({ operation: operation });
     }
-    
-    throw new Error("Model tidak memberikan gambar. Gunakan deskripsi yang lebih spesifik.");
+
+    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!downloadLink) throw new Error("Gagal mendapatkan link download video.");
+
+    // Fetch MP4 bytes with the API Key
+    const response = await fetch(`${downloadLink}&key=${apiKey}`);
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
   } catch (err: any) {
-    console.error("Gemini API Error:", err);
+    if (err.message?.includes("Requested entity was not found")) {
+      await (window as any).aistudio.openSelectKey();
+      throw new Error("Sesi API kadaluarsa. Silakan pilih API Key berbayar Anda kembali.");
+    }
     throw err;
   }
 };
 
-/**
- * Fetches SEO trends using Google Search grounding.
- */
 export const getSEOTrends = async (query: string): Promise<{ text: string; sources: any[] }> => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey === "undefined") return { text: "API Key tidak disetel.", sources: [] };
-  
-  const ai = new GoogleGenAI({ apiKey });
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Analisis tren e-commerce 2025: ${query}. Berikan insight produk viral dan keyword pencarian tertinggi.`,
-      config: { tools: [{ googleSearch: {} }] }
-    });
-    return {
-      text: response.text || "Tidak ada data ditemukan.",
-      sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || []
-    };
-  } catch (err) {
-    console.error("SEO Error:", err);
-    return { text: "Gagal memuat tren SEO.", sources: [] };
-  }
+  const ai = new GoogleGenAI({ apiKey: apiKey! });
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: `Analisis tren e-commerce 2025: ${query}.`,
+    config: { tools: [{ googleSearch: {} }] }
+  });
+  return { text: response.text || "", sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [] };
 };
 
-/**
- * Generates copywriting using an image and text prompt.
- */
 export const generateCopywriting = async (file: File, type: string): Promise<string> => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey === "undefined") return "API Key tidak ditemukan.";
-
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: apiKey! });
   const imgPart = await fileToPart(file);
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: { parts: [imgPart, { text: `Tulis ${type} persuasif AIDA untuk produk ini.` }] }
-    });
-    return response.text || "Gagal menghasilkan teks.";
-  } catch (err) {
-    console.error("Copywriting Error:", err);
-    return "Terjadi kesalahan pada Marketing Lab.";
-  }
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: { parts: [imgPart, { text: `Tulis ${type} persuasif AIDA.` }] }
+  });
+  return response.text || "";
 };

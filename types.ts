@@ -32,6 +32,7 @@ export enum NavItem {
   COMMERCIAL = 'Commercial Hub',
   UGC = 'UGC Studio',
   ADS = 'Ads Studio',
+  VIDEO = 'Video Studio',
   HUMAN = 'Human Studio',
   MAGIC = 'Magic Tools',
   SEO = 'SEO Trends',
