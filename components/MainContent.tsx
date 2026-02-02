@@ -7,14 +7,15 @@ import {
   generateImage, 
   generateVideo,
   getSEOTrends,
-  generateCopywriting
+  generateCopywriting,
+  generateVoiceOver
 } from '../services/geminiService';
 import { 
   Download, Sparkles, Loader2, ShoppingBag, Box, Smartphone, Megaphone,
   X, Maximize2, ShieldCheck, CheckCircle, AlertTriangle, LayoutGrid, Camera, Zap, ChevronLeft, ChevronRight,
   Shirt, Layers, Hand, PackageOpen, Wand2, Focus, Compass, ArrowRight, BarChart3, Trash2, Calendar, History as HistoryIcon,
   Monitor, Youtube, Instagram, Sun, Video, Play, FileVideo, PenTool, GraduationCap, Palette, Layers as LayersIcon,
-  CheckCircle2, Users, UserCircle
+  CheckCircle2, Users, UserCircle, Mic, Volume2
 } from 'lucide-react';
 
 const ENVIRONMENTS = [
@@ -104,6 +105,12 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
 
+  // New states for extra features
+  const [generatingVideoIdx, setGeneratingVideoIdx] = useState<number | null>(null);
+  const [generatingAudioIdx, setGeneratingAudioIdx] = useState<number | null>(null);
+  const [extraVideos, setExtraVideos] = useState<Record<number, string>>({});
+  const [extraAudios, setExtraAudios] = useState<Record<number, string>>({});
+
   // Set default submode when activeItem changes
   useEffect(() => {
     if (SUB_MODES[activeItem]) {
@@ -136,6 +143,8 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     setError(null); 
     setResults([]);
     setVideoResult(null);
+    setExtraVideos({});
+    setExtraAudios({});
     
     try {
       if (activeItem === NavItem.VIDEO) {
@@ -152,7 +161,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         let baseSysPrompt = currentSubModeObj?.prompt || "";
         
         if (activeItem === NavItem.COMMERCIAL && subMode === 'ai-fashion' && refImages.length > 0) {
-            baseSysPrompt += " MANDATORY: Extract the face from the provided reference image and map it onto the AI fashion model. Preserve facial features, skin tone, and identity exactly.";
+            baseSysPrompt += ` [IDENTITY PRESERVATION PROTOCOL ACTIVE] CRITICAL: You MUST use the EXACT facial identity, structure, eyes, nose, and skin tone from the STYLE REFERENCE image. The fashion model in the generated image MUST be the same person as in the reference image. Preserve all unique facial features detail-for-detail. Do not use a generic face.`;
         }
 
         const userPrompt = `${activeStyle}. ${prompt}`.trim();
@@ -196,6 +205,36 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     } finally {
       setIsGenerating(false);
       setBatchProgress({ current: 0, total: 0 });
+    }
+  };
+
+  const handleGenerateVideoForResult = async (idx: number, imageUrl: string) => {
+    setGeneratingVideoIdx(idx);
+    try {
+        const videoUrl = await generateVideo(
+            `Professional marketing video for this product. Cinematic lighting. Motion zoom. ${activeStyle}`,
+            ratio === AspectRatio.LANDSCAPE ? '16:9' : '9:16',
+            '720p',
+            imageUrl
+        );
+        setExtraVideos(prev => ({ ...prev, [idx]: videoUrl }));
+    } catch (e: any) {
+        setError("Gagal membuat video promo: " + e.message);
+    } finally {
+        setGeneratingVideoIdx(null);
+    }
+  };
+
+  const handleGenerateVoiceOverForResult = async (idx: number, imageUrl: string) => {
+    setGeneratingAudioIdx(idx);
+    try {
+        const script = await generateCopywriting(imageUrl, "Iklan Pendek");
+        const audioUrl = await generateVoiceOver(script);
+        setExtraAudios(prev => ({ ...prev, [idx]: audioUrl }));
+    } catch (e: any) {
+        setError("Gagal membuat voice over: " + e.message);
+    } finally {
+        setGeneratingAudioIdx(null);
     }
   };
 
@@ -434,7 +473,7 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                   <h3 className="text-3xl font-black text-slate-900 flex items-center gap-4">
                       Gallery Hasil {batchEnabled && <span className="text-xs bg-teal-500 text-white px-5 py-1.5 rounded-full">{results.length} Files</span>}
                   </h3>
-                  <button onClick={() => {setResults([]); setVideoResult(null);}} className="text-slate-200 hover:text-red-500 transition-all hover:rotate-90"><X size={40} /></button>
+                  <button onClick={() => {setResults([]); setVideoResult(null); setExtraVideos({}); setExtraAudios({});}} className="text-slate-200 hover:text-red-500 transition-all hover:rotate-90"><X size={40} /></button>
               </div>
               
               {videoResult ? (
@@ -453,9 +492,52 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                          </div>
                          <AngleBadge label={res.angle} />
                          <img src={res.url} className="w-full object-cover" alt="Generated" />
-                         <div className="absolute inset-0 bg-slate-900/70 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-6 backdrop-blur-sm">
-                            <button onClick={() => setSelectedIdx(i)} className="p-5 bg-white rounded-2xl text-slate-900 hover:scale-110 transition-transform"><Maximize2 size={24} /></button>
-                            <a href={res.url} download={`magic-picture-${i}.png`} className="p-5 bg-teal-500 rounded-2xl text-white hover:scale-110 transition-transform"><Download size={24} /></a>
+                         
+                         {/* MAIN HOVER OVERLAY */}
+                         <div className="absolute inset-0 bg-slate-900/80 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-6 backdrop-blur-md">
+                            <div className="flex items-center gap-6">
+                                <button onClick={() => setSelectedIdx(i)} className="p-5 bg-white rounded-2xl text-slate-900 hover:scale-110 transition-transform shadow-lg" title="Show Full Image"><Maximize2 size={24} /></button>
+                                <a href={res.url} download={`magic-picture-${i}.png`} className="p-5 bg-teal-500 rounded-2xl text-white hover:scale-110 transition-transform shadow-lg" title="Download Image"><Download size={24} /></a>
+                            </div>
+
+                            {/* EXTRA AI FEATURES TOOLBAR */}
+                            <div className="flex flex-col gap-3 w-full px-12 animate-in slide-in-from-bottom-4">
+                                <div className="h-px bg-white/10 w-full mb-1" />
+                                
+                                {/* Video Generate Button */}
+                                {extraVideos[i] ? (
+                                    <div className="space-y-2">
+                                        <video src={extraVideos[i]} controls className="w-full h-24 rounded-xl bg-black border border-white/20" />
+                                        <a href={extraVideos[i]} download="magic-promo.mp4" className="block text-center py-2 bg-purple-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-purple-700">Simpan Video</a>
+                                    </div>
+                                ) : (
+                                    <button 
+                                        disabled={generatingVideoIdx === i}
+                                        onClick={() => handleGenerateVideoForResult(i, res.url)}
+                                        className="w-full flex items-center justify-center gap-3 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-[10px] font-black uppercase tracking-widest border border-white/10 transition-all"
+                                    >
+                                        {generatingVideoIdx === i ? <Loader2 size={14} className="animate-spin" /> : <FileVideo size={14} />}
+                                        {generatingVideoIdx === i ? 'Processing Video...' : 'Video Promo AI'}
+                                    </button>
+                                )}
+
+                                {/* Voice Over Button */}
+                                {extraAudios[i] ? (
+                                    <div className="flex items-center gap-3 bg-white/20 p-2 rounded-xl">
+                                        <Volume2 size={16} className="text-teal-400" />
+                                        <audio src={extraAudios[i]} controls className="h-6 flex-1 filter invert" />
+                                    </div>
+                                ) : (
+                                    <button 
+                                        disabled={generatingAudioIdx === i}
+                                        onClick={() => handleGenerateVoiceOverForResult(i, res.url)}
+                                        className="w-full flex items-center justify-center gap-3 py-3 rounded-xl bg-teal-500/80 hover:bg-teal-500 text-white text-[10px] font-black uppercase tracking-widest transition-all"
+                                    >
+                                        {generatingAudioIdx === i ? <Loader2 size={14} className="animate-spin" /> : <Mic size={14} />}
+                                        {generatingAudioIdx === i ? 'Processing Voice...' : 'Voice Over AI'}
+                                    </button>
+                                )}
+                            </div>
                          </div>
                       </div>
                     ))}
