@@ -22,6 +22,14 @@ const ENVIRONMENTS = [
   "Ruang Tamu Minimalis", "Dapur Estetik", "Interior Mobil", "Meja Kerja"
 ];
 
+const PHOTO_ANGLES = [
+  { id: "D-0", label: "Front View (Depan)" },
+  { id: "D-3Q", label: "3/4 View (Perspektif)" },
+  { id: "D-90", label: "Side View (Samping)" },
+  { id: "Flatlay", label: "Top View (Flatlay)" },
+  { id: "D-180", label: "Back View (Belakang)" }
+];
+
 const REASSURING_MESSAGES = [
   "Menyiapkan mesin AI Video...",
   "Menganalisis prompt visual Anda...",
@@ -127,11 +135,10 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
     setIsGenerating(true); 
     setError(null); 
     setResults([]);
-    setVideoResult(null); // FIX: Reset video result when starting a new generation
+    setVideoResult(null);
     
     try {
       if (activeItem === NavItem.VIDEO) {
-        // Guard clause to prevent crash if running outside AI Studio environment
         if ((window as any).aistudio && (window as any).aistudio.hasSelectedApiKey) {
           const hasKey = await (window as any).aistudio.hasSelectedApiKey();
           if (!hasKey) await (window as any).aistudio.openSelectKey();
@@ -144,7 +151,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         const currentSubModeObj = SUB_MODES[activeItem]?.find(m => m.id === subMode);
         let baseSysPrompt = currentSubModeObj?.prompt || "";
         
-        // Logika khusus Swap Wajah untuk Commercial Hub - AI Fashion
         if (activeItem === NavItem.COMMERCIAL && subMode === 'ai-fashion' && refImages.length > 0) {
             baseSysPrompt += " MANDATORY: Extract the face from the provided reference image and map it onto the AI fashion model. Preserve facial features, skin tone, and identity exactly.";
         }
@@ -284,7 +290,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                 </div>
               </div>
 
-              {/* BATCH MODE TOGGLE */}
               {activeItem !== NavItem.VIDEO && (
                   <button 
                       onClick={() => {
@@ -301,7 +306,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
         </div>
 
         <div className="bg-white p-10 lg:p-16 rounded-[4rem] shadow-xl border border-gray-100 space-y-12">
-            {/* SUB MODES RENDERER */}
             {SUB_MODES[activeItem] && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {SUB_MODES[activeItem].map(b => (
@@ -330,7 +334,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                     </div>
                 </div>
                 
-                {/* BAGIAN SWAP WAJAH (KHUSUS COMMERCIAL HUB) */}
                 {activeItem === NavItem.COMMERCIAL ? (
                   <div className="space-y-4 animate-in slide-in-from-right-4">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1 flex items-center gap-2">
@@ -362,11 +365,17 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
                 <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Contoh: 'Hutan pinus berkabut', 'Meja marmer putih'..." className="w-full h-24 bg-gray-50 border-2 border-gray-100 p-6 rounded-[2rem] outline-none focus:border-teal-500 text-sm font-medium transition-all" />
             </div>
 
-            <div className="grid grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                <div className="space-y-4">
                   <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Vibe / Lingkungan</label>
                   <select value={activeStyle} onChange={e => setActiveStyle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 p-5 rounded-[1.5rem] text-[10px] font-black uppercase outline-none focus:border-teal-500 cursor-pointer">
                     {ENVIRONMENTS.map(env => <option key={env} value={env}>{env}</option>)}
+                  </select>
+               </div>
+               <div className="space-y-4">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Angle Foto</label>
+                  <select value={activeAngle} onChange={e => setActiveAngle(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 p-5 rounded-[1.5rem] text-[10px] font-black uppercase outline-none focus:border-teal-500 cursor-pointer">
+                    {PHOTO_ANGLES.map(ang => <option key={ang.id} value={ang.id}>{ang.label}</option>)}
                   </select>
                </div>
                <div className="space-y-4">
@@ -419,7 +428,6 @@ const MainContent: React.FC<{ activeItem: NavItem; setActiveItem: (i: NavItem) =
             {error && <div className="p-8 bg-red-50 border-2 border-red-100 text-red-500 rounded-[2.5rem] flex items-center gap-5 animate-bounce"><AlertTriangle className="shrink-0" size={24} /><div className="text-xs font-black uppercase tracking-tight">{error}</div></div>}
         </div>
 
-        {/* RESULTS SECTION */}
         {(results.length > 0 || videoResult) && (
           <div className="bg-white p-12 rounded-[4.5rem] shadow-2xl border border-gray-100 animate-in zoom-in duration-500">
               <div className="flex items-center justify-between mb-10 border-b pb-8">
